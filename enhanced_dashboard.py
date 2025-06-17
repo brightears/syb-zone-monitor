@@ -394,6 +394,11 @@ async def dashboard():
             color: white;
         }
         
+        .status-unknown {
+            background: #e5e5e5;
+            color: #666666;
+        }
+        
         .zone-duration {
             font-size: 0.8125rem;
             color: #dc2626;
@@ -808,6 +813,10 @@ async def dashboard():
                     statusText = 'Subscription Expired';
                     statusIcon = '⚠';
                     break;
+                case 'unknown':
+                    statusText = 'Checking...';
+                    statusIcon = '⋯';
+                    break;
                 default:
                     statusIcon = '?';
             }
@@ -1115,6 +1124,9 @@ async def get_zones():
                     elif zone_status == 'expired':
                         status = 'expired'
                         has_issues = True
+                else:
+                    # Zone hasn't been checked yet - mark as having issues so we can track it
+                    has_issues = True
                 
                 zone_data = {
                     'id': zone_id,
