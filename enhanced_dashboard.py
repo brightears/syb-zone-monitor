@@ -334,10 +334,10 @@ async def dashboard():
             padding: 1rem;
             border-radius: 6px;
             border: 1px solid transparent;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-rows: 1fr auto auto;
             gap: 0.5rem;
-            min-height: 100px;
+            min-height: 120px;
             position: relative;
             transition: all 0.15s ease;
         }
@@ -348,16 +348,17 @@ async def dashboard():
         }
         
         .zone-name {
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: #1d1d1f;
-            line-height: 1.3;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            line-height: 1.4;
             word-break: break-word;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            flex-grow: 1;
+            letter-spacing: -0.2px;
+            align-self: start;
         }
         
         .zone-status {
@@ -397,8 +398,8 @@ async def dashboard():
             font-size: 0.8125rem;
             color: #dc2626;
             font-weight: 500;
-            margin-top: auto;
             text-align: center;
+            align-self: end;
         }
         
         .notify-btn {
