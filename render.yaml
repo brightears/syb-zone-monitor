@@ -2,6 +2,7 @@ services:
   - type: web
     name: syb-zone-monitor
     runtime: python
+    runtimeVersion: "3.11"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT"
     envVars:
