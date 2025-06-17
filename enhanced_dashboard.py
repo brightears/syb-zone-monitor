@@ -40,13 +40,20 @@ def load_discovered_data():
     global discovered_data
     
     results_file = Path("accounts_discovery_results.json")
+    minimal_file = Path("accounts_discovery_minimal.json")
+    
     if results_file.exists():
         with open(results_file, 'r') as f:
             data = json.load(f)
             discovered_data = data.get('accounts', {})
             logger.info(f"Loaded data for {len(discovered_data)} accounts")
+    elif minimal_file.exists():
+        with open(minimal_file, 'r') as f:
+            data = json.load(f)
+            discovered_data = data.get('accounts', {})
+            logger.info(f"Loaded minimal data for {len(discovered_data)} accounts")
     else:
-        logger.warning("No discovery results found. Run process_all_accounts.py first.")
+        logger.warning("No discovery results found. Using empty data.")
         discovered_data = {}
 
 
@@ -109,39 +116,40 @@ async def startup_event():
     zone_ids = get_all_zone_ids()
     
     if not zone_ids:
-        logger.error("No zones found in discovery data!")
-        return
+        logger.warning("No zones found in discovery data - app will run with empty data")
+        # Don't return early - let the app run even with no zones
     
     # Initialize zone monitor with discovered zones
     api_key = os.getenv("SYB_API_KEY")
     if not api_key:
         logger.error("SYB_API_KEY not found in environment")
         return
+    
+    if zone_ids:
+        # Initialize zone monitor with discovered zones
+        from zone_monitor import ZoneMonitor
+        from types import SimpleNamespace
         
-    # Initialize zone monitor with discovered zones
-    from zone_monitor import ZoneMonitor
-    from types import SimpleNamespace
-    
-    # Create a mock config for the zone monitor
-    mock_config = SimpleNamespace(
-        syb_api_key=api_key,
-        syb_api_url="https://api.soundtrackyourbrand.com/v2",
-        zone_ids=zone_ids,
-        polling_interval=int(os.getenv("POLLING_INTERVAL", "60")),
-        offline_threshold=600,
-        request_timeout=30,
-        max_retries=5,
-        log_level=os.getenv("LOG_LEVEL", "INFO")
-    )
-    
-    zone_monitor = ZoneMonitor(mock_config)
-    logger.info(f"Initialized zone monitor with {len(zone_ids)} zones")
-    
-    # Zone monitor will be used by the background task
-    logger.info("Zone monitor initialized and ready")
-    
-    # Start background task to check zones periodically
-    asyncio.create_task(monitor_zones_background())
+        # Create a mock config for the zone monitor
+        mock_config = SimpleNamespace(
+            syb_api_key=api_key,
+            syb_api_url="https://api.soundtrackyourbrand.com/v2",
+            zone_ids=zone_ids,
+            polling_interval=int(os.getenv("POLLING_INTERVAL", "60")),
+            offline_threshold=600,
+            request_timeout=30,
+            max_retries=5,
+            log_level=os.getenv("LOG_LEVEL", "INFO")
+        )
+        
+        zone_monitor = ZoneMonitor(mock_config)
+        logger.info(f"Initialized zone monitor with {len(zone_ids)} zones")
+        
+        # Start background task to check zones periodically
+        asyncio.create_task(monitor_zones_background())
+    else:
+        logger.warning("No zones to monitor - running in display-only mode")
+        zone_monitor = None
 
 
 @app.get("/", response_class=HTMLResponse)
