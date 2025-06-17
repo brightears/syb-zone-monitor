@@ -885,7 +885,8 @@ async def dashboard():
 async def get_zones():
     """API endpoint to get all zone data."""
     if not zone_monitor:
-        raise HTTPException(status_code=503, detail="Zone monitor not initialized")
+        # Return empty data when no zones are configured
+        return {"accounts": {}}
     
     # Combine discovered data with current status
     accounts_data = {}
