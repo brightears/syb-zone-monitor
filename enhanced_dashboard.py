@@ -789,6 +789,8 @@ async def dashboard():
                 alert('No contacts available for this account');
                 return;
             }
+            window.currentAccountId = accountId;
+            window.currentAccount = account;
             
             const modal = document.getElementById('notificationModal');
             const modalBody = document.getElementById('modalBody');
@@ -824,6 +826,33 @@ async def dashboard():
                 ${clientContacts.length === 0 && bmasiaContacts.length === 0 ? 
                     '<div class="no-contacts">No contacts available</div>' : ''}
                 
+                <div class="message-section" style="margin-top: 1.5rem;">
+                    <h4 style="margin-bottom: 0.75rem; color: #1d1d1f;">Notification Message</h4>
+                    <select id="messageTemplate" onchange="updateMessagePreview()" style="
+                        width: 100%;
+                        padding: 0.5rem;
+                        margin-bottom: 0.75rem;
+                        border: 1px solid #d1d1d6;
+                        border-radius: 6px;
+                        background: white;
+                        color: #1d1d1f;
+                    ">
+                        <option value="offline">Zones Offline Alert</option>
+                        <option value="expired">Subscription Expired</option>
+                        <option value="unpaired">No Paired Device</option>
+                        <option value="custom">Custom Message</option>
+                    </select>
+                    <textarea id="messageContent" rows="6" style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        border: 1px solid #d1d1d6;
+                        border-radius: 6px;
+                        resize: vertical;
+                        font-family: inherit;
+                        color: #1d1d1f;
+                    " placeholder="Your notification message will appear here..."></textarea>
+                </div>
+                
                 <div class="modal-actions">
                     <button class="btn-secondary" onclick="closeModal()">Cancel</button>
                     <button class="btn-primary" onclick="sendNotification('${accountId}')">
@@ -833,6 +862,70 @@ async def dashboard():
             `;
             
             modal.style.display = 'flex';
+            
+            // Initialize with offline template
+            setTimeout(() => updateMessagePreview(), 100);
+        }
+        
+        function updateMessagePreview() {
+            const template = document.getElementById('messageTemplate').value;
+            const messageContent = document.getElementById('messageContent');
+            const account = window.currentAccount;
+            
+            if (!account) return;
+            
+            const offlineZones = account.zones.filter(z => z.status === 'offline');
+            const expiredZones = account.zones.filter(z => z.status === 'expired');
+            const unpairedZones = account.zones.filter(z => z.status === 'unpaired');
+            
+            let message = '';
+            
+            switch(template) {
+                case 'offline':
+                    if (offlineZones.length > 0) {
+                        message = `Dear ${account.name} team,\n\n`;
+                        message += `We've detected that ${offlineZones.length} of your music zones are currently offline:\n\n`;
+                        offlineZones.forEach(z => {
+                            message += `• ${z.name}\n`;
+                        });
+                        message += `\nPlease check your internet connection and ensure the devices are powered on. `;
+                        message += `If you need assistance, please don't hesitate to contact our support team.\n\n`;
+                        message += `Best regards,\nSoundtrack Your Brand Support`;
+                    }
+                    break;
+                    
+                case 'expired':
+                    if (expiredZones.length > 0) {
+                        message = `Dear ${account.name} team,\n\n`;
+                        message += `Your subscription has expired for the following zones:\n\n`;
+                        expiredZones.forEach(z => {
+                            message += `• ${z.name}\n`;
+                        });
+                        message += `\nTo continue enjoying uninterrupted music service, please renew your subscription. `;
+                        message += `Contact our team for renewal options.\n\n`;
+                        message += `Best regards,\nSoundtrack Your Brand Support`;
+                    }
+                    break;
+                    
+                case 'unpaired':
+                    if (unpairedZones.length > 0) {
+                        message = `Dear ${account.name} team,\n\n`;
+                        message += `We've noticed that ${unpairedZones.length} zones have no paired devices:\n\n`;
+                        unpairedZones.forEach(z => {
+                            message += `• ${z.name}\n`;
+                        });
+                        message += `\nTo activate these zones, please install the Soundtrack Player app on a device `;
+                        message += `and pair it with your zone. Need help? Our support team is here to assist.\n\n`;
+                        message += `Best regards,\nSoundtrack Your Brand Support`;
+                    }
+                    break;
+                    
+                case 'custom':
+                    message = ''; // Let user write their own
+                    break;
+            }
+            
+            messageContent.value = message;
         }
         
         function renderContact(contact, checked) {
@@ -858,8 +951,15 @@ async def dashboard():
                 selectedEmails.push(checkbox.value);
             });
             
+            const message = document.getElementById('messageContent').value;
+            
             if (selectedEmails.length === 0) {
                 alert('Please select at least one contact');
+                return;
+            }
+            
+            if (!message.trim()) {
+                alert('Please enter a notification message');
                 return;
             }
             
@@ -871,7 +971,8 @@ async def dashboard():
                     },
                     body: JSON.stringify({
                         account_id: accountId,
-                        emails: selectedEmails
+                        emails: selectedEmails,
+                        message: message
                     })
                 });
                 
@@ -992,6 +1093,7 @@ async def send_notification(data: dict):
     """Send notification for an account."""
     account_id = data.get('account_id')
     emails = data.get('emails', [])
+    message = data.get('message', '')
     
     if not account_id or not emails:
         return JSONResponse(
@@ -1012,18 +1114,21 @@ async def send_notification(data: dict):
     filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
     
     with open(filename, 'w') as f:
-        f.write(f"Notification for: {account_info['name']}\n")
-        f.write(f"Account ID: {account_id}\n")
-        f.write(f"Recipients: {', '.join(emails)}\n")
-        f.write(f"Timestamp: {datetime.now()}\n\n")
-        f.write("Zone Status:\n")
+        f.write(f"=== NOTIFICATION EMAIL ===\n\n")
+        f.write(f"TO: {', '.join(emails)}\n")
+        f.write(f"FROM: support@bmasiamusic.com\n")
+        f.write(f"SUBJECT: Zone Status Alert - {account_info['name']}\n")
+        f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"\n--- MESSAGE ---\n\n")
+        f.write(message)
+        f.write(f"\n\n--- ZONE STATUS DETAILS ---\n\n")
         
         for location in account_info.get('locations', []):
             for zone in location.get('zones', []):
                 zone_id = zone.get('id')
-                if zone_id and zone_id in zone_monitor.zone_status:
-                    status = zone_monitor.zone_status[zone_id]
-                    f.write(f"- {zone['name']}: {status.status}\n")
+                if zone_id and zone_id in zone_monitor.zone_states:
+                    status = zone_monitor.zone_states[zone_id]
+                    f.write(f"- {zone['name']}: {status}\n")
     
     return JSONResponse(content={
         'success': True,
