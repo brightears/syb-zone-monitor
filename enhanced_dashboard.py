@@ -378,6 +378,12 @@ async def dashboard():
             color: white;
         }
         
+        .zone-duration {
+            font-size: 0.7rem;
+            color: #86868b;
+            margin-top: 0.25rem;
+        }
+        
         .notify-btn {
             padding: 0.5rem 1rem;
             background: #3b82f6;
@@ -773,14 +779,38 @@ async def dashboard():
                     statusIcon = '?';
             }
             
+            // Add offline duration if available
+            let durationText = '';
+            if (zone.status === 'offline' && zone.offline_duration) {
+                const duration = formatDuration(zone.offline_duration);
+                durationText = `<div class="zone-duration">Offline for ${duration}</div>`;
+            }
+            
             return `
                 <div class="zone-item">
                     <div class="zone-name" title="${escapeHtml(zone.name)}">${escapeHtml(zone.name)}</div>
                     <div class="zone-status ${statusClass}">
                         ${statusIcon} ${statusText}
                     </div>
+                    ${durationText}
                 </div>
             `;
+        }
+        
+        function formatDuration(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+            
+            if (days > 0) {
+                return `${days} day${days !== 1 ? 's' : ''}`;
+            } else if (hours > 0) {
+                return `${hours} hour${hours !== 1 ? 's' : ''}`;
+            } else if (minutes > 0) {
+                return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+            } else {
+                return `${seconds} second${seconds !== 1 ? 's' : ''}`;
+            }
         }
         
         function showNotificationModal(accountId, accountName) {
@@ -1031,6 +1061,13 @@ async def get_zones():
                 # Get current status from zone monitor
                 zone_status = zone_monitor.zone_states.get(zone_id)
                 
+                # Get offline duration if available
+                offline_duration = None
+                if zone_id in zone_monitor.offline_since:
+                    offline_since = zone_monitor.offline_since[zone_id]
+                    duration = datetime.now() - offline_since
+                    offline_duration = int(duration.total_seconds())
+                
                 status = 'unknown'
                 if zone_status:
                     if zone_status == 'offline':
@@ -1045,12 +1082,18 @@ async def get_zones():
                         status = 'expired'
                         has_issues = True
                 
-                account_zones.append({
+                zone_data = {
                     'id': zone_id,
                     'name': zone.get('name', 'Unknown'),
                     'status': status,
                     'location': location.get('name', 'Unknown')
-                })
+                }
+                
+                # Add offline duration if applicable
+                if offline_duration is not None:
+                    zone_data['offline_duration'] = offline_duration
+                
+                account_zones.append(zone_data)
         
         # Get contacts from both discovered data and FINAL_CONTACT_ANALYSIS
         contacts = []
