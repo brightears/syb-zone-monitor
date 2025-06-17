@@ -499,15 +499,16 @@ async def dashboard():
             align-items: center;
             gap: 0.75rem;
             padding: 0.75rem;
-            background: #0f172a;
-            border-radius: 8px;
-            border: 1px solid #334155;
+            background: #f5f5f5;
+            border-radius: 6px;
+            border: 1px solid #e5e5e5;
         }
         
         .contact-item input[type="checkbox"] {
             width: 18px;
             height: 18px;
             cursor: pointer;
+            accent-color: #1a1a1a;
         }
         
         .contact-info {
@@ -574,12 +575,14 @@ async def dashboard():
         
         /* BMAsia email indicator */
         .bmasia-tag {
-            background: #581c87;
-            color: #e9d5ff;
-            padding: 0.125rem 0.5rem;
-            border-radius: 4px;
+            background: #8b5cf6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
             font-size: 0.625rem;
             margin-left: 0.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -864,17 +867,17 @@ async def dashboard():
             );
             
             modalBody.innerHTML = `
-                <h3 style="margin-bottom: 1rem; color: #94a3b8;">Account: ${escapeHtml(accountName)}</h3>
+                <h3 style="margin-bottom: 1rem; color: #666666;">Account: ${escapeHtml(accountName)}</h3>
                 
                 ${clientContacts.length > 0 ? `
-                    <h4 style="margin-bottom: 0.75rem; color: #f1f5f9;">Client Contacts</h4>
+                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Client Contacts</h4>
                     <div class="contact-list">
                         ${clientContacts.map(contact => renderContact(contact, true)).join('')}
                     </div>
                 ` : ''}
                 
                 ${bmasiaContacts.length > 0 ? `
-                    <h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; color: #f1f5f9;">
+                    <h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1a1a1a;">
                         Internal Contacts
                         <span class="bmasia-tag">BMAsia</span>
                     </h4>
@@ -887,15 +890,15 @@ async def dashboard():
                     '<div class="no-contacts">No contacts available</div>' : ''}
                 
                 <div class="message-section" style="margin-top: 1.5rem;">
-                    <h4 style="margin-bottom: 0.75rem; color: #1d1d1f;">Notification Message</h4>
+                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Notification Message</h4>
                     <select id="messageTemplate" onchange="updateMessagePreview()" style="
                         width: 100%;
                         padding: 0.5rem;
                         margin-bottom: 0.75rem;
-                        border: 1px solid #d1d1d6;
+                        border: 1px solid #e5e5e5;
                         border-radius: 6px;
                         background: white;
-                        color: #1d1d1f;
+                        color: #1a1a1a;
                     ">
                         <option value="offline">Zones Offline Alert</option>
                         <option value="expired">Subscription Expired</option>
@@ -905,11 +908,12 @@ async def dashboard():
                     <textarea id="messageContent" rows="6" style="
                         width: 100%;
                         padding: 0.75rem;
-                        border: 1px solid #d1d1d6;
+                        border: 1px solid #e5e5e5;
                         border-radius: 6px;
                         resize: vertical;
                         font-family: inherit;
-                        color: #1d1d1f;
+                        color: #1a1a1a;
+                        background: white;
                     " placeholder="Your notification message will appear here..."></textarea>
                 </div>
                 
