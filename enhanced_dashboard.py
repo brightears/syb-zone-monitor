@@ -171,15 +171,16 @@ async def dashboard():
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: #0a0e27;
-            color: #e4e4e7;
+            background: #f5f5f7;
+            color: #1d1d1f;
             line-height: 1.6;
         }
         
         .header {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            background: white;
+            border-bottom: 1px solid #d1d1d6;
             padding: 1.5rem 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             position: sticky;
             top: 0;
             z-index: 100;
@@ -188,19 +189,17 @@ async def dashboard():
         .header h1 {
             font-size: 1.75rem;
             font-weight: 600;
-            background: linear-gradient(to right, #60a5fa, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #1d1d1f;
         }
         
         .stats-bar {
-            background: #1e293b;
+            background: white;
             padding: 1rem 2rem;
             display: flex;
             gap: 2rem;
             flex-wrap: wrap;
             align-items: center;
-            border-bottom: 1px solid #334155;
+            border-bottom: 1px solid #d1d1d6;
         }
         
         .stat-item {
@@ -208,7 +207,8 @@ async def dashboard():
             flex-direction: column;
             align-items: center;
             padding: 0.5rem 1rem;
-            background: #0f172a;
+            background: #f9f9f9;
+            border: 1px solid #e5e5e7;
             border-radius: 8px;
             min-width: 120px;
         }
@@ -216,18 +216,18 @@ async def dashboard():
         .stat-value {
             font-size: 1.5rem;
             font-weight: bold;
-            color: #60a5fa;
+            color: #007aff;
         }
         
         .stat-label {
             font-size: 0.875rem;
-            color: #94a3b8;
+            color: #86868b;
         }
         
         .controls {
             padding: 1rem 2rem;
-            background: #0f172a;
-            border-bottom: 1px solid #1e293b;
+            background: white;
+            border-bottom: 1px solid #d1d1d6;
             display: flex;
             gap: 1rem;
             align-items: center;
@@ -241,10 +241,10 @@ async def dashboard():
         .search-box input {
             width: 100%;
             padding: 0.75rem 1rem 0.75rem 2.5rem;
-            background: #1e293b;
-            border: 1px solid #334155;
+            background: #f9f9f9;
+            border: 1px solid #d1d1d6;
             border-radius: 8px;
-            color: #e4e4e7;
+            color: #1d1d1f;
             font-size: 0.875rem;
         }
         
@@ -263,22 +263,24 @@ async def dashboard():
         
         .filter-btn {
             padding: 0.5rem 1rem;
-            background: #1e293b;
-            border: 1px solid #334155;
+            background: white;
+            border: 1px solid #d1d1d6;
             border-radius: 6px;
-            color: #e4e4e7;
+            color: #1d1d1f;
             cursor: pointer;
             transition: all 0.2s;
             font-size: 0.875rem;
         }
         
         .filter-btn:hover {
-            background: #334155;
+            background: #f5f5f7;
+            border-color: #86868b;
         }
         
         .filter-btn.active {
-            background: #3b82f6;
-            border-color: #3b82f6;
+            background: #007aff;
+            color: white;
+            border-color: #007aff;
         }
         
         .accounts-container {
@@ -288,16 +290,17 @@ async def dashboard():
         }
         
         .account-card {
-            background: #1e293b;
-            border: 1px solid #334155;
+            background: white;
+            border: 1px solid #d1d1d6;
             border-radius: 12px;
             padding: 1.5rem;
             transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
         .account-card:hover {
-            border-color: #475569;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border-color: #86868b;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
         .account-header {
@@ -356,23 +359,23 @@ async def dashboard():
         }
         
         .status-online {
-            background: #065f46;
-            color: #6ee7b7;
+            background: #34c759;
+            color: white;
         }
         
         .status-offline {
-            background: #991b1b;
-            color: #fca5a5;
+            background: #ff3b30;
+            color: white;
         }
         
-        .status-no-device {
-            background: #92400e;
-            color: #fcd34d;
+        .status-unpaired {
+            background: #ff9500;
+            color: white;
         }
         
         .status-expired {
-            background: #6b21a8;
-            color: #e9d5ff;
+            background: #8e8e93;
+            color: white;
         }
         
         .notify-btn {
@@ -745,13 +748,36 @@ async def dashboard():
         
         function renderZone(zone) {
             const statusClass = `status-${zone.status}`;
-            const statusText = zone.status.replace('_', ' ');
+            let statusText = zone.status.replace('_', ' ');
+            let statusIcon = '';
+            
+            // Map status to proper display text
+            switch(zone.status) {
+                case 'online':
+                    statusText = 'Connected';
+                    statusIcon = '✓';
+                    break;
+                case 'offline':
+                    statusText = 'Offline';
+                    statusIcon = '✗';
+                    break;
+                case 'unpaired':
+                    statusText = 'No Paired Device';
+                    statusIcon = '⚠';
+                    break;
+                case 'expired':
+                    statusText = 'Subscription Expired';
+                    statusIcon = '⚠';
+                    break;
+                default:
+                    statusIcon = '?';
+            }
             
             return `
                 <div class="zone-item">
                     <div class="zone-name" title="${escapeHtml(zone.name)}">${escapeHtml(zone.name)}</div>
                     <div class="zone-status ${statusClass}">
-                        ${zone.status === 'online' ? '✓' : '✗'} ${statusText}
+                        ${statusIcon} ${statusText}
                     </div>
                 </div>
             `;
