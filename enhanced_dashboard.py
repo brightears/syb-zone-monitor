@@ -394,6 +394,11 @@ async def dashboard():
             color: white;
         }
         
+        .status-update_required {
+            background: #8b5cf6;
+            color: white;
+        }
+        
         .status-unknown {
             background: #e5e5e5;
             color: #666666;
@@ -813,6 +818,10 @@ async def dashboard():
                     statusText = 'Subscription Expired';
                     statusIcon = '⚠';
                     break;
+                case 'update_required':
+                    statusText = 'App Update Required';
+                    statusIcon = '⬆';
+                    break;
                 case 'unknown':
                     statusText = 'Checking...';
                     statusIcon = '⋯';
@@ -1123,6 +1132,9 @@ async def get_zones():
                         has_issues = True
                     elif zone_status == 'expired':
                         status = 'expired'
+                        has_issues = True
+                    elif zone_status == 'update_required':
+                        status = 'update_required'
                         has_issues = True
                 else:
                     # Zone hasn't been checked yet - mark as having issues so we can track it
