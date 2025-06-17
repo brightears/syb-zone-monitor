@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  uptime-monitor:
+    build: .
+    container_name: syb-uptime-monitor
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"  # Web dashboard
+      - "8000:8000"  # Health check endpoint (if needed)
+    volumes:
+      - ./logs:/app/logs  # Optional: for log persistence
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - monitoring
+
+  # Optional: Add nginx reverse proxy if needed
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: syb-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - uptime-monitor
+  #   networks:
+  #     - monitoring
+
+networks:
+  monitoring:
+    driver: bridge

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: syb-zone-monitor
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT"
+    envVars:
+      - key: SYB_API_KEY
+        sync: false
+      - key: POLLING_INTERVAL
+        value: 60
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONUNBUFFERED
+        value: 1
+    autoDeploy: true
+    healthCheckPath: /health

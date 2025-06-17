@@ -1,0 +1,32 @@
+[Unit]
+Description=SYB Zone Uptime Monitor
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/uptime-monitor
+Environment=PATH=/opt/uptime-monitor/venv/bin
+ExecStart=/opt/uptime-monitor/venv/bin/python main_with_dashboard.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=syb-uptime-monitor
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/uptime-monitor
+CapabilityBoundingSet=
+
+# Environment file
+EnvironmentFile=/opt/uptime-monitor/.env
+
+[Install]
+WantedBy=multi-user.target
