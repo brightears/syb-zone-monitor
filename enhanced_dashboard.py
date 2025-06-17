@@ -79,10 +79,27 @@ def get_all_zone_ids() -> List[str]:
     return zone_ids
 
 
+async def monitor_zones_background():
+    """Background task to periodically check zone status."""
+    global zone_monitor
+    
+    while True:
+        try:
+            if zone_monitor:
+                await zone_monitor.check_zones()
+                logger.debug("Zone check completed")
+        except Exception as e:
+            logger.error(f"Error in background monitoring: {e}")
+        
+        # Wait for the polling interval
+        await asyncio.sleep(60)  # Check every 60 seconds
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application."""
     global zone_monitor
+    import os
     
     # Load discovered data
     load_discovered_data()
@@ -101,11 +118,30 @@ async def startup_event():
         logger.error("SYB_API_KEY not found in environment")
         return
         
-    zone_monitor = ZoneMonitor(api_key, zone_ids)
+    # Initialize zone monitor with discovered zones
+    from zone_monitor import ZoneMonitor
+    from types import SimpleNamespace
+    
+    # Create a mock config for the zone monitor
+    mock_config = SimpleNamespace(
+        syb_api_key=api_key,
+        syb_api_url="https://api.soundtrackyourbrand.com/v2",
+        zone_ids=zone_ids,
+        polling_interval=int(os.getenv("POLLING_INTERVAL", "60")),
+        offline_threshold=600,
+        request_timeout=30,
+        max_retries=5,
+        log_level=os.getenv("LOG_LEVEL", "INFO")
+    )
+    
+    zone_monitor = ZoneMonitor(mock_config)
     logger.info(f"Initialized zone monitor with {len(zone_ids)} zones")
     
-    # Start monitoring
-    asyncio.create_task(zone_monitor.start_monitoring())
+    # Zone monitor will be used by the background task
+    logger.info("Zone monitor initialized and ready")
+    
+    # Start background task to check zones periodically
+    asyncio.create_task(monitor_zones_background())
 
 
 @app.get("/", response_class=HTMLResponse)
