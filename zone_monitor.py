@@ -37,14 +37,41 @@ class ZoneMonitor:
         """Check status of all configured zones."""
         self.last_check_time = datetime.now()
         
-        for zone_id in self.config.zone_ids:
-            try:
-                status, zone_name, details = await self._check_zone_status(zone_id)
-                await self._update_zone_state(zone_id, status, zone_name, details)
-            except Exception as e:
-                self.logger.error(f"Failed to check zone {zone_id}: {e}")
-                # Treat failed checks as offline
-                await self._update_zone_state(zone_id, "offline", self.zone_names.get(zone_id, zone_id), {})
+        # Process zones in batches for better performance
+        batch_size = 50  # Check 50 zones concurrently for faster processing
+        zone_ids = list(self.config.zone_ids)
+        total_zones = len(zone_ids)
+        
+        self.logger.info(f"Starting to check {total_zones} zones in batches of {batch_size}")
+        
+        for i in range(0, total_zones, batch_size):
+            batch = zone_ids[i:i + batch_size]
+            tasks = []
+            
+            for zone_id in batch:
+                task = self._check_single_zone(zone_id)
+                tasks.append(task)
+            
+            # Wait for all tasks in this batch to complete
+            await asyncio.gather(*tasks)
+            
+            # Log progress
+            checked = min(i + batch_size, total_zones)
+            self.logger.info(f"Checked {checked}/{total_zones} zones ({checked*100//total_zones}%)")
+            
+            # Small delay between batches to avoid overwhelming the API
+            if i + batch_size < total_zones:
+                await asyncio.sleep(0.5)
+    
+    async def _check_single_zone(self, zone_id: str) -> None:
+        """Check a single zone and update its state."""
+        try:
+            status, zone_name, details = await self._check_zone_status(zone_id)
+            await self._update_zone_state(zone_id, status, zone_name, details)
+        except Exception as e:
+            self.logger.error(f"Failed to check zone {zone_id}: {e}")
+            # Treat failed checks as offline
+            await self._update_zone_state(zone_id, "offline", self.zone_names.get(zone_id, zone_id), {})
     
     async def _check_zone_status(self, zone_id: str) -> Tuple[str, str, Dict]:
         """Check detailed status of a specific zone using SYB GraphQL API."""
@@ -68,11 +95,15 @@ class ZoneMonitor:
         
         variables = {"zoneId": zone_id}
         
-        for attempt in range(self.config.max_retries):
+        # Reduce retries for faster checking
+        max_retries = min(2, self.config.max_retries)  # Max 2 retries instead of 5
+        
+        for attempt in range(max_retries):
             try:
                 response = await self.client.post(
                     self.config.syb_api_url,
-                    json={"query": query, "variables": variables}
+                    json={"query": query, "variables": variables},
+                    timeout=10.0  # Reduce timeout to 10 seconds
                 )
                 response.raise_for_status()
                 
@@ -108,9 +139,9 @@ class ZoneMonitor:
                 
             except Exception as e:
                 self.logger.warning(f"Attempt {attempt + 1} failed for zone {zone_id}: {e}")
-                if attempt < self.config.max_retries - 1:
-                    # Exponential backoff
-                    wait_time = 2 ** attempt
+                if attempt < max_retries - 1:
+                    # Shorter wait time
+                    wait_time = 1  # Just 1 second between retries
                     await asyncio.sleep(wait_time)
                 else:
                     raise
