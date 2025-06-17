@@ -928,19 +928,19 @@ async def get_zones():
                     continue
                     
                 # Get current status from zone monitor
-                zone_status = zone_monitor.zone_status.get(zone_id)
+                zone_status = zone_monitor.zone_states.get(zone_id)
                 
                 status = 'unknown'
                 if zone_status:
-                    if zone_status.status == 'OFFLINE':
+                    if zone_status == 'offline':
                         status = 'offline'
                         has_issues = True
-                    elif zone_status.status == 'ONLINE':
+                    elif zone_status == 'online':
                         status = 'online'
-                    elif zone_status.status == 'NO_DEVICE':
-                        status = 'no_device'
+                    elif zone_status == 'unpaired':
+                        status = 'unpaired'
                         has_issues = True
-                    elif zone_status.status == 'EXPIRED':
+                    elif zone_status == 'expired':
                         status = 'expired'
                         has_issues = True
                 
