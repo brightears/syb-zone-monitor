@@ -325,37 +325,45 @@ async def dashboard():
         
         .zones-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 0.75rem;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
         }
         
         .zone-item {
-            background: #0f172a;
-            padding: 0.75rem;
+            background: #f9f9f9;
+            padding: 1rem;
             border-radius: 8px;
-            border: 1px solid #334155;
+            border: 1px solid #e5e5e7;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-height: 100px;
+            position: relative;
         }
         
         .zone-name {
-            font-size: 0.875rem;
-            color: #e4e4e7;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #1d1d1f;
+            line-height: 1.3;
+            word-break: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            margin-right: 0.5rem;
+            flex-grow: 1;
         }
         
         .zone-status {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 0.25rem;
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
+            font-size: 0.8rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
             white-space: nowrap;
+            font-weight: 500;
         }
         
         .status-online {
@@ -379,9 +387,14 @@ async def dashboard():
         }
         
         .zone-duration {
-            font-size: 0.7rem;
-            color: #86868b;
-            margin-top: 0.25rem;
+            font-size: 0.8rem;
+            color: #ff3b30;
+            font-weight: 600;
+            background: #ffe5e5;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            margin-top: auto;
+            align-self: center;
         }
         
         .notify-btn {
@@ -783,7 +796,7 @@ async def dashboard():
             let durationText = '';
             if (zone.status === 'offline' && zone.offline_duration) {
                 const duration = formatDuration(zone.offline_duration);
-                durationText = `<div class="zone-duration">Offline for ${duration}</div>`;
+                durationText = `<div class="zone-duration">${duration}</div>`;
             }
             
             return `
