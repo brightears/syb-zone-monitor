@@ -313,7 +313,7 @@ async def dashboard():
         .account-name {
             font-size: 1.125rem;
             font-weight: 600;
-            color: #f1f5f9;
+            color: #1d1d1f;
         }
         
         .account-stats {
