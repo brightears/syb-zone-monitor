@@ -171,63 +171,61 @@ async def dashboard():
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f7;
-            color: #1d1d1f;
+            background: #fafafa;
+            color: #1a1a1a;
             line-height: 1.6;
         }
         
         .header {
-            background: white;
-            border-bottom: 1px solid #d1d1d6;
-            padding: 1.5rem 2rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: #ffffff;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 1.25rem 2rem;
             position: sticky;
             top: 0;
             z-index: 100;
         }
         
         .header h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            color: #1d1d1f;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
         }
         
         .stats-bar {
-            background: white;
-            padding: 1rem 2rem;
+            background: #ffffff;
+            padding: 1.5rem 2rem;
             display: flex;
-            gap: 2rem;
+            gap: 3rem;
             flex-wrap: wrap;
             align-items: center;
-            border-bottom: 1px solid #d1d1d6;
+            border-bottom: 1px solid #e5e5e5;
         }
         
         .stat-item {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            padding: 0.5rem 1rem;
-            background: #f9f9f9;
-            border: 1px solid #e5e5e7;
-            border-radius: 8px;
-            min-width: 120px;
+            align-items: flex-start;
         }
         
         .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #007aff;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1;
         }
         
         .stat-label {
             font-size: 0.875rem;
-            color: #86868b;
+            color: #666666;
+            font-weight: 400;
+            margin-top: 0.25rem;
         }
         
         .controls {
-            padding: 1rem 2rem;
-            background: white;
-            border-bottom: 1px solid #d1d1d6;
+            padding: 1.25rem 2rem;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e5e5;
             display: flex;
             gap: 1rem;
             align-items: center;
@@ -263,24 +261,25 @@ async def dashboard():
         
         .filter-btn {
             padding: 0.5rem 1rem;
-            background: white;
-            border: 1px solid #d1d1d6;
-            border-radius: 6px;
-            color: #1d1d1f;
+            background: transparent;
+            border: 1px solid #e5e5e5;
+            border-radius: 20px;
+            color: #666666;
             cursor: pointer;
             transition: all 0.2s;
             font-size: 0.875rem;
+            font-weight: 500;
         }
         
         .filter-btn:hover {
-            background: #f5f5f7;
-            border-color: #86868b;
+            border-color: #cccccc;
+            color: #1a1a1a;
         }
         
         .filter-btn.active {
-            background: #007aff;
+            background: #1a1a1a;
             color: white;
-            border-color: #007aff;
+            border-color: #1a1a1a;
         }
         
         .accounts-container {
@@ -290,17 +289,16 @@ async def dashboard():
         }
         
         .account-card {
-            background: white;
-            border: 1px solid #d1d1d6;
-            border-radius: 12px;
+            background: #ffffff;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
             padding: 1.5rem;
-            transition: all 0.3s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
         }
         
         .account-card:hover {
-            border-color: #86868b;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-color: #cccccc;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
         
         .account-header {
@@ -312,15 +310,17 @@ async def dashboard():
         
         .account-name {
             font-size: 1.125rem;
-            font-weight: 600;
-            color: #1d1d1f;
+            font-weight: 700;
+            color: #1a1a1a;
+            letter-spacing: -0.3px;
         }
         
         .account-stats {
             display: flex;
             gap: 1rem;
             font-size: 0.875rem;
-            color: #94a3b8;
+            color: #666666;
+            margin-top: 0.25rem;
         }
         
         .zones-grid {
@@ -330,15 +330,21 @@ async def dashboard():
         }
         
         .zone-item {
-            background: #f9f9f9;
+            background: #f5f5f5;
             padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid #e5e5e7;
+            border-radius: 6px;
+            border: 1px solid transparent;
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
             min-height: 100px;
             position: relative;
+            transition: all 0.15s ease;
+        }
+        
+        .zone-item:hover {
+            background: #eeeeee;
+            border-color: #e5e5e5;
         }
         
         .zone-name {
@@ -355,66 +361,68 @@ async def dashboard():
         }
         
         .zone-status {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.25rem;
-            font-size: 0.8rem;
-            padding: 0.3rem 0.6rem;
-            border-radius: 6px;
+            gap: 0.375rem;
+            font-size: 0.8125rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 16px;
             white-space: nowrap;
             font-weight: 500;
+            align-self: center;
         }
         
         .status-online {
-            background: #34c759;
+            background: #10b981;
             color: white;
         }
         
         .status-offline {
-            background: #ff3b30;
+            background: #ef4444;
             color: white;
         }
         
         .status-unpaired {
-            background: #ff9500;
+            background: #f59e0b;
             color: white;
         }
         
         .status-expired {
-            background: #8e8e93;
+            background: #6b7280;
             color: white;
         }
         
         .zone-duration {
-            font-size: 0.8rem;
-            color: #ff3b30;
-            font-weight: 600;
-            background: #ffe5e5;
-            padding: 0.3rem 0.6rem;
-            border-radius: 6px;
+            font-size: 0.8125rem;
+            color: #dc2626;
+            font-weight: 500;
             margin-top: auto;
-            align-self: center;
+            text-align: center;
         }
         
         .notify-btn {
-            padding: 0.5rem 1rem;
-            background: #3b82f6;
+            padding: 0.5rem 1.25rem;
+            background: #1a1a1a;
             border: none;
-            border-radius: 6px;
+            border-radius: 20px;
             color: white;
             cursor: pointer;
             font-size: 0.875rem;
-            transition: all 0.2s;
+            font-weight: 500;
+            transition: all 0.15s;
         }
         
         .notify-btn:hover {
-            background: #2563eb;
+            background: #000000;
+            transform: translateY(-1px);
         }
         
         .notify-btn:disabled {
-            background: #475569;
+            background: #e5e5e5;
+            color: #999999;
             cursor: not-allowed;
+            transform: none;
         }
         
         .countdown {
@@ -437,21 +445,21 @@ async def dashboard():
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
             align-items: center;
             justify-content: center;
         }
         
         .modal-content {
-            background: #1e293b;
+            background: #ffffff;
             padding: 2rem;
-            border-radius: 12px;
+            border-radius: 8px;
             max-width: 500px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
-            border: 1px solid #334155;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }
         
         .modal-header {
@@ -506,12 +514,13 @@ async def dashboard():
         }
         
         .contact-email {
-            color: #60a5fa;
+            color: #1a1a1a;
             font-size: 0.875rem;
+            font-weight: 500;
         }
         
         .contact-name {
-            color: #94a3b8;
+            color: #666666;
             font-size: 0.75rem;
         }
         
@@ -523,33 +532,37 @@ async def dashboard():
         }
         
         .btn-primary {
-            padding: 0.75rem 1.5rem;
-            background: #3b82f6;
+            padding: 0.625rem 1.25rem;
+            background: #1a1a1a;
             border: none;
-            border-radius: 6px;
+            border-radius: 20px;
             color: white;
             cursor: pointer;
             font-size: 0.875rem;
-            transition: all 0.2s;
+            font-weight: 500;
+            transition: all 0.15s;
         }
         
         .btn-primary:hover {
-            background: #2563eb;
+            background: #000000;
+            transform: translateY(-1px);
         }
         
         .btn-secondary {
-            padding: 0.75rem 1.5rem;
-            background: #475569;
-            border: none;
-            border-radius: 6px;
-            color: white;
+            padding: 0.625rem 1.25rem;
+            background: transparent;
+            border: 1px solid #e5e5e5;
+            border-radius: 20px;
+            color: #666666;
             cursor: pointer;
             font-size: 0.875rem;
-            transition: all 0.2s;
+            font-weight: 500;
+            transition: all 0.15s;
         }
         
         .btn-secondary:hover {
-            background: #64748b;
+            border-color: #cccccc;
+            color: #1a1a1a;
         }
         
         .no-contacts {
@@ -749,13 +762,16 @@ async def dashboard():
                             <div class="account-name">${escapeHtml(account.name)}</div>
                             <div class="account-stats">
                                 <span>${account.zones.length} zones</span>
-                                ${offlineCount > 0 ? `<span style="color: #fca5a5">${offlineCount} offline</span>` : ''}
-                                ${noDeviceCount > 0 ? `<span style="color: #fcd34d">${noDeviceCount} no device</span>` : ''}
+                                ${offlineCount > 0 ? `<span style="color: #ef4444">${offlineCount} offline</span>` : ''}
+                                ${noDeviceCount > 0 ? `<span style="color: #f59e0b">${noDeviceCount} no device</span>` : ''}
                             </div>
                         </div>
                         <button class="notify-btn" onclick="showNotificationModal('${id}', '${escapeHtml(account.name)}')"
                                 ${account.hasContacts ? '' : 'disabled'}>
-                            📧 Notify
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle;">
+                                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                            </svg>
+                            <span>Notify</span>
                         </button>
                     </div>
                     <div class="zones-grid">
