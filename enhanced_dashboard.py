@@ -1109,31 +1109,79 @@ async def send_notification(data: dict):
             status_code=404
         )
     
-    # Simulate sending notification (replace with actual email logic)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
+    # Send actual email
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
     
-    with open(filename, 'w') as f:
-        f.write(f"=== NOTIFICATION EMAIL ===\n\n")
-        f.write(f"TO: {', '.join(emails)}\n")
-        f.write(f"FROM: support@bmasiamusic.com\n")
-        f.write(f"SUBJECT: Zone Status Alert - {account_info['name']}\n")
-        f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"\n--- MESSAGE ---\n\n")
-        f.write(message)
-        f.write(f"\n\n--- ZONE STATUS DETAILS ---\n\n")
-        
-        for location in account_info.get('locations', []):
-            for zone in location.get('zones', []):
-                zone_id = zone.get('id')
-                if zone_id and zone_id in zone_monitor.zone_states:
-                    status = zone_monitor.zone_states[zone_id]
-                    f.write(f"- {zone['name']}: {status}\n")
+    # Get SMTP settings from environment
+    smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port = int(os.getenv('SMTP_PORT', '587'))
+    smtp_username = os.getenv('SMTP_USERNAME', '')
+    smtp_password = os.getenv('SMTP_PASSWORD', '')
+    email_from = os.getenv('EMAIL_FROM', 'support@bmasiamusic.com')
     
-    return JSONResponse(content={
-        'success': True,
-        'message': f'Notification saved to {filename}'
-    })
+    # Build zone status details
+    zone_details = []
+    for location in account_info.get('locations', []):
+        for zone in location.get('zones', []):
+            zone_id = zone.get('id')
+            if zone_id and zone_id in zone_monitor.zone_states:
+                status = zone_monitor.zone_states[zone_id]
+                zone_details.append(f"• {zone['name']}: {status}")
+    
+    # Create email
+    subject = f"Zone Status Alert - {account_info['name']}"
+    
+    # Add zone details to message if any
+    full_message = message
+    if zone_details:
+        full_message += f"\n\n--- Current Zone Status ---\n" + "\n".join(zone_details)
+    
+    try:
+        # If SMTP credentials are configured, send real email
+        if smtp_username and smtp_password:
+            msg = MIMEMultipart()
+            msg['From'] = email_from
+            msg['To'] = ', '.join(emails)
+            msg['Subject'] = subject
+            
+            msg.attach(MIMEText(full_message, 'plain'))
+            
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_username, smtp_password)
+                server.send_message(msg)
+            
+            return JSONResponse(content={
+                'success': True,
+                'message': f'Email sent to {", ".join(emails)}'
+            })
+        else:
+            # Fallback: save to file if SMTP not configured
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
+            
+            with open(filename, 'w') as f:
+                f.write(f"=== NOTIFICATION EMAIL ===\n\n")
+                f.write(f"TO: {', '.join(emails)}\n")
+                f.write(f"FROM: {email_from}\n")
+                f.write(f"SUBJECT: {subject}\n")
+                f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"\n--- MESSAGE ---\n\n")
+                f.write(full_message)
+            
+            return JSONResponse(content={
+                'success': True,
+                'message': f'Email saved to {filename} (SMTP not configured)'
+            })
+            
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        return JSONResponse(content={
+            'success': False,
+            'message': f'Failed to send email: {str(e)}'
+        }, status_code=500)
 
 
 if __name__ == "__main__":
