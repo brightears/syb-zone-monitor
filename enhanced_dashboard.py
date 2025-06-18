@@ -15,12 +15,6 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from zone_monitor_optimized import ZoneMonitor
-try:
-    from sms_service import get_sms_service
-except ImportError:
-    # SMS service not available yet
-    def get_sms_service():
-        return None
 import os
 from dotenv import load_dotenv
 
@@ -920,24 +914,6 @@ async def dashboard():
             modalBody.innerHTML = `
                 <h3 style="margin-bottom: 1rem; color: #666666;">Account: ${escapeHtml(accountName)}</h3>
                 
-                <!-- Notification Method Selection -->
-                <div class="notification-methods" style="margin-bottom: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
-                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Notification Method</h4>
-                    <div style="display: flex; gap: 1.5rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" id="emailNotification" checked style="width: 18px; height: 18px;">
-                            <span style="font-size: 0.875rem;">📧 Email</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" id="smsNotification" style="width: 18px; height: 18px;">
-                            <span style="font-size: 0.875rem;">📱 SMS</span>
-                        </label>
-                    </div>
-                    <div id="smsWarning" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fef3c7; border-radius: 4px; font-size: 0.75rem; color: #92400e;">
-                        ⚠️ SMS notifications will be sent to contacts with verified phone numbers only
-                    </div>
-                </div>
-                
                 ${clientContacts.length > 0 ? `
                     <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Client Contacts</h4>
                     <div class="contact-list">
@@ -999,16 +975,6 @@ async def dashboard():
             
             // Initialize with offline template
             setTimeout(() => updateMessagePreview(), 100);
-            
-            // Add event listener for SMS checkbox
-            document.getElementById('smsNotification').addEventListener('change', function(e) {
-                const smsWarning = document.getElementById('smsWarning');
-                if (e.target.checked) {
-                    smsWarning.style.display = 'block';
-                } else {
-                    smsWarning.style.display = 'none';
-                }
-            });
         }
         
         function updateMessagePreview() {
@@ -1133,23 +1099,13 @@ async def dashboard():
         }
         
         function renderContact(contact, checked) {
-            const hasPhone = contact.phone && contact.phone !== '';
-            const safeId = contact.email.replace(/[@.]/g, '_');
             return `
                 <div class="contact-item">
-                    <input type="checkbox" id="contact_${safeId}" 
-                           value="${contact.email}" 
-                           data-phone="${contact.phone || ''}"
-                           data-has-phone="${hasPhone}"
-                           ${checked ? 'checked' : ''}>
+                    <input type="checkbox" id="contact_${contact.email}" 
+                           value="${contact.email}" ${checked ? 'checked' : ''}>
                     <div class="contact-info">
                         <div class="contact-email">${escapeHtml(contact.email)}</div>
                         ${contact.name ? `<div class="contact-name">${escapeHtml(contact.name)}</div>` : ''}
-                        ${hasPhone ? `
-                            <div class="contact-phone" style="font-size: 0.75rem; color: #10b981; margin-top: 0.25rem;">
-                                📱 ${escapeHtml(contact.phone)}
-                            </div>
-                        ` : ''}
                     </div>
                 </div>
             `;
@@ -1160,41 +1116,15 @@ async def dashboard():
         }
         
         async function sendNotification(accountId) {
-            const selectedContacts = [];
             const selectedEmails = [];
-            const selectedPhones = [];
-            
-            const sendEmail = document.getElementById('emailNotification').checked;
-            const sendSMS = document.getElementById('smsNotification').checked;
-            
-            // Collect selected contacts and their info
             document.querySelectorAll('#modalBody input[type="checkbox"]:checked').forEach(checkbox => {
-                if (checkbox.id && checkbox.id.startsWith('contact_')) {
-                    const email = checkbox.value;
-                    const phone = checkbox.dataset.phone;
-                    const hasPhone = checkbox.dataset.hasPhone === 'true';
-                    
-                    selectedEmails.push(email);
-                    if (hasPhone && phone) {
-                        selectedPhones.push({email: email, phone: phone});
-                    }
-                }
+                selectedEmails.push(checkbox.value);
             });
             
             const message = document.getElementById('messageContent').value;
             
             if (selectedEmails.length === 0) {
                 alert('Please select at least one contact');
-                return;
-            }
-            
-            if (!sendEmail && !sendSMS) {
-                alert('Please select at least one notification method (Email or SMS)');
-                return;
-            }
-            
-            if (sendSMS && selectedPhones.length === 0) {
-                alert('No selected contacts have phone numbers. Please add phone numbers or use email only.');
                 return;
             }
             
@@ -1211,31 +1141,14 @@ async def dashboard():
                     },
                     body: JSON.stringify({
                         account_id: accountId,
-                        emails: sendEmail ? selectedEmails : [],
-                        phones: sendSMS ? selectedPhones : [],
-                        message: message,
-                        send_email: sendEmail,
-                        send_sms: sendSMS
+                        emails: selectedEmails,
+                        message: message
                     })
                 });
                 
                 const result = await response.json();
                 if (result.success) {
-                    let successMsg = 'Notification sent successfully!\n\n';
-                    
-                    if (result.results) {
-                        if (result.results.email_sent) {
-                            successMsg += `✅ Email sent to ${result.results.email_sent} recipient(s)\n`;
-                        }
-                        if (result.results.sms_sent) {
-                            successMsg += `✅ SMS sent to ${result.results.sms_sent} recipient(s)\n`;
-                        }
-                        if (result.results.sms_failed && result.results.sms_failed > 0) {
-                            successMsg += `⚠️ SMS failed for ${result.results.sms_failed} recipient(s)\n`;
-                        }
-                    }
-                    
-                    alert(successMsg);
+                    alert('Notification sent successfully!');
                     closeModal();
                 } else {
                     alert('Failed to send notification: ' + result.message);
@@ -1359,20 +1272,11 @@ async def send_notification(data: dict):
     """Send notification for an account."""
     account_id = data.get('account_id')
     emails = data.get('emails', [])
-    phones = data.get('phones', [])
     message = data.get('message', '')
-    send_email = data.get('send_email', True)
-    send_sms = data.get('send_sms', False)
     
-    if not account_id:
+    if not account_id or not emails:
         return JSONResponse(
-            content={'success': False, 'message': 'Missing account_id'},
-            status_code=400
-        )
-    
-    if not emails and not phones:
-        return JSONResponse(
-            content={'success': False, 'message': 'No recipients specified'},
+            content={'success': False, 'message': 'Missing account_id or emails'},
             status_code=400
         )
     
@@ -1383,13 +1287,6 @@ async def send_notification(data: dict):
             content={'success': False, 'message': 'Account not found'},
             status_code=404
         )
-    
-    # Initialize results
-    results = {
-        'email_sent': 0,
-        'sms_sent': 0,
-        'sms_failed': 0
-    }
     
     # Send actual email
     import smtplib
@@ -1421,87 +1318,42 @@ async def send_notification(data: dict):
         full_message += f"\n\n--- Current Zone Status ---\n" + "\n".join(zone_details)
     
     try:
-        # Send emails if requested
-        if send_email and emails:
-            # If SMTP credentials are configured, send real email
-            if smtp_username and smtp_password:
-                msg = MIMEMultipart()
-                msg['From'] = email_from
-                msg['To'] = ', '.join(emails)
-                msg['Subject'] = subject
-                
-                msg.attach(MIMEText(full_message, 'plain'))
-                
-                with smtplib.SMTP(smtp_host, smtp_port) as server:
-                    server.starttls()
-                    server.login(smtp_username, smtp_password)
-                    server.send_message(msg)
-                
-                results['email_sent'] = len(emails)
-                logger.info(f"Email sent to {len(emails)} recipients for {account_info['name']}")
-            else:
-                # Fallback: save to file if SMTP not configured
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
-                
-                with open(filename, 'w') as f:
-                    f.write(f"=== NOTIFICATION EMAIL ===\n\n")
-                    f.write(f"TO: {', '.join(emails)}\n")
-                    f.write(f"FROM: {email_from}\n")
-                    f.write(f"SUBJECT: {subject}\n")
-                    f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"\n--- MESSAGE ---\n\n")
-                    f.write(full_message)
-                
-                results['email_sent'] = len(emails)
-                logger.info(f"Email saved to {filename} (SMTP not configured)")
-        
-        # Send SMS if requested
-        if send_sms and phones:
-            sms_service = get_sms_service()
+        # If SMTP credentials are configured, send real email
+        if smtp_username and smtp_password:
+            msg = MIMEMultipart()
+            msg['From'] = email_from
+            msg['To'] = ', '.join(emails)
+            msg['Subject'] = subject
             
-            if sms_service and hasattr(sms_service, 'enabled') and sms_service.enabled:
-                # Prepare zone data for SMS formatting
-                zones_data = []
-                for location in account_info.get('locations', []):
-                    for zone in location.get('zones', []):
-                        zone_id = zone.get('id')
-                        if zone_id and zone_id in zone_monitor.zone_states:
-                            zone_status = zone_monitor.zone_states[zone_id]
-                            offline_duration = None
-                            if zone_id in zone_monitor.offline_since:
-                                offline_duration = int((datetime.now() - zone_monitor.offline_since[zone_id]).total_seconds())
-                            
-                            zones_data.append({
-                                'name': zone['name'],
-                                'status': zone_status,
-                                'offline_duration': offline_duration
-                            })
-                
-                # Format SMS message based on zone status
-                sms_message = sms_service.format_sms_alert(account_info['name'], zones_data)
-                
-                # If no pre-formatted message, use a shortened version of the email
-                if not sms_message:
-                    sms_message = sms_service.format_custom_sms(message)
-                
-                # Send SMS to each phone number
-                for phone_data in phones:
-                    phone = phone_data.get('phone') if isinstance(phone_data, dict) else phone_data
-                    if phone:
-                        result = await sms_service.send_sms(phone, sms_message)
-                        if result['success']:
-                            results['sms_sent'] += 1
-                        else:
-                            results['sms_failed'] += 1
-                            logger.error(f"SMS failed for {phone}: {result.get('error')}")
-            else:
-                logger.warning("SMS requested but service not enabled")
-        
-        return JSONResponse(content={
-            'success': True,
-            'results': results
-        })
+            msg.attach(MIMEText(full_message, 'plain'))
+            
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_username, smtp_password)
+                server.send_message(msg)
+            
+            return JSONResponse(content={
+                'success': True,
+                'message': f'Email sent to {", ".join(emails)}'
+            })
+        else:
+            # Fallback: save to file if SMTP not configured
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
+            
+            with open(filename, 'w') as f:
+                f.write(f"=== NOTIFICATION EMAIL ===\n\n")
+                f.write(f"TO: {', '.join(emails)}\n")
+                f.write(f"FROM: {email_from}\n")
+                f.write(f"SUBJECT: {subject}\n")
+                f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"\n--- MESSAGE ---\n\n")
+                f.write(full_message)
+            
+            return JSONResponse(content={
+                'success': True,
+                'message': f'Email saved to {filename} (SMTP not configured)'
+            })
             
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
