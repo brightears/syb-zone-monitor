@@ -399,9 +399,21 @@ async def dashboard():
             color: white;
         }
         
+        .status-checking {
+            background: #007aff;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+        
         .status-unknown {
             background: #e5e5e5;
             color: #666666;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
         
         .zone-duration {
@@ -829,6 +841,10 @@ async def dashboard():
                     statusText = 'No Subscription';
                     statusIcon = '💳';
                     break;
+                case 'checking':
+                    statusText = 'Checking...';
+                    statusIcon = '⋯';
+                    break;
                 case 'unknown':
                     statusText = 'Checking...';
                     statusIcon = '⋯';
@@ -1104,6 +1120,9 @@ async def get_zones():
         # Return empty data when no zones are configured
         return {"accounts": {}}
     
+    # Get detailed status from zone monitor
+    detailed_status = zone_monitor.get_detailed_status()
+    
     # Combine discovered data with current status
     accounts_data = {}
     
@@ -1117,35 +1136,21 @@ async def get_zones():
                 if not zone_id:
                     continue
                     
-                # Get current status from zone monitor
-                zone_status = zone_monitor.zone_states.get(zone_id)
+                # Get current status from detailed status
+                zone_info = detailed_status.get(zone_id, {})
+                zone_status = zone_info.get('status', 'checking')
                 
                 # Get offline duration if available
-                offline_duration = None
-                if zone_id in zone_monitor.offline_since:
-                    offline_since = zone_monitor.offline_since[zone_id]
-                    duration = datetime.now() - offline_since
-                    offline_duration = int(duration.total_seconds())
+                offline_duration = zone_info.get('offline_duration_seconds')
                 
-                status = 'unknown'
+                status = 'checking'  # Default to 'checking' instead of 'unknown'
                 if zone_status:
-                    if zone_status == 'offline':
-                        status = 'offline'
+                    status = zone_status
+                    if zone_status in ['offline', 'unpaired', 'expired', 'no_subscription']:
                         has_issues = True
-                    elif zone_status == 'online':
-                        status = 'online'
-                    elif zone_status == 'unpaired':
-                        status = 'unpaired'
-                        has_issues = True
-                    elif zone_status == 'expired':
-                        status = 'expired'
-                        has_issues = True
-                    elif zone_status == 'no_subscription':
-                        status = 'no_subscription'
-                        has_issues = True
-                else:
-                    # Zone hasn't been checked yet - mark as having issues so we can track it
-                    has_issues = True
+                    elif zone_status == 'checking':
+                        # Don't mark as having issues while checking
+                        pass
                 
                 zone_data = {
                     'id': zone_id,
