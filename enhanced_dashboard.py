@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-from zone_monitor import ZoneMonitor
+from zone_monitor_optimized import ZoneMonitor
 import os
 from dotenv import load_dotenv
 
@@ -127,7 +127,7 @@ async def startup_event():
     
     if zone_ids:
         # Initialize zone monitor with discovered zones
-        from zone_monitor import ZoneMonitor
+        from zone_monitor_optimized import ZoneMonitor
         from types import SimpleNamespace
         
         # Create a mock config for the zone monitor

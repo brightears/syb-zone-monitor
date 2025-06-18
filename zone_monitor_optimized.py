@@ -1,9 +1,10 @@
-"""Zone monitoring logic for tracking SYB zone status."""
+"""Optimized zone monitoring with better rate limit handling."""
 
 import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
+import random
 
 import httpx
 
@@ -16,19 +17,23 @@ except ImportError:
 
 
 class ZoneMonitor:
-    """Monitors SYB zones and tracks offline durations."""
+    """Monitors SYB zones with optimized rate limit handling."""
     
     def __init__(self, config: Config):
         self.config = config
         self.logger = logging.getLogger(__name__)
         
         # Zone tracking - now with detailed status
-        self.zone_states: Dict[str, str] = {}  # zone_id -> status ('online', 'offline', 'expired', 'unpaired')
+        self.zone_states: Dict[str, str] = {}  # zone_id -> status
         self.zone_names: Dict[str, str] = {}    # zone_id -> zone_name
         self.zone_details: Dict[str, Dict] = {} # zone_id -> detailed info
         self.offline_since: Dict[str, datetime] = {}  # zone_id -> offline_start_time
         self.last_check_time: Optional[datetime] = None
         self.db = None  # Database instance
+        
+        # Rate limiting
+        self.rate_limit_reset = datetime.now()
+        self.available_tokens = 100  # Start with assumed tokens
         
         # HTTP client with retry logic
         self.client = httpx.AsyncClient(
@@ -60,38 +65,54 @@ class ZoneMonitor:
             self.logger.info(f"Loaded {len(saved_states)} zone states from database")
     
     async def check_zones(self) -> None:
-        """Check status of all configured zones."""
+        """Check status of all configured zones with smart rate limiting."""
         self.last_check_time = datetime.now()
         
-        # Process zones in smaller batches to avoid rate limits
-        batch_size = 10  # Reduced from 50 to avoid rate limits
+        # Dynamic batch size based on available tokens
+        # Each query costs 16 tokens, so batch size = available_tokens / 16
+        batch_size = max(1, min(20, self.available_tokens // 16))  # Max 20, min 1
+        
         zone_ids = list(self.config.zone_ids)
         total_zones = len(zone_ids)
         
-        # Shuffle zones to ensure fair checking if rate limited
-        import random
+        # Shuffle zones to ensure fair checking across batches
         random.shuffle(zone_ids)
         
-        self.logger.info(f"Starting to check {total_zones} zones in batches of {batch_size}")
+        self.logger.info(f"Starting to check {total_zones} zones in batches of {batch_size} (available tokens: {self.available_tokens})")
+        
+        checked_count = 0
         
         for i in range(0, total_zones, batch_size):
             batch = zone_ids[i:i + batch_size]
-            tasks = []
             
+            # Check if we need to wait for rate limit reset
+            if self.available_tokens < len(batch) * 16:
+                wait_time = max(0, (self.rate_limit_reset - datetime.now()).total_seconds())
+                if wait_time > 0:
+                    self.logger.info(f"Rate limit reached. Waiting {wait_time:.1f}s for reset...")
+                    await asyncio.sleep(wait_time + 1)  # Add 1s buffer
+                    self.available_tokens = 100  # Reset tokens
+            
+            tasks = []
             for zone_id in batch:
                 task = self._check_single_zone(zone_id)
                 tasks.append(task)
             
             # Wait for all tasks in this batch to complete
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful checks
+            successful = sum(1 for r in results if not isinstance(r, Exception))
+            checked_count += successful
             
             # Log progress
-            checked = min(i + batch_size, total_zones)
-            self.logger.info(f"Checked {checked}/{total_zones} zones ({checked*100//total_zones}%)")
+            self.logger.info(f"Checked {checked_count}/{total_zones} zones ({checked_count*100//total_zones}%)")
             
-            # Longer delay between batches to respect rate limits
-            if i + batch_size < total_zones:
-                await asyncio.sleep(2)  # Increased from 0.5 to 2 seconds
+            # Adaptive delay based on success rate
+            if successful < len(batch) / 2:  # More than half failed
+                await asyncio.sleep(2)  # Longer delay
+            elif i + batch_size < total_zones:
+                await asyncio.sleep(0.5)  # Normal delay between batches
     
     async def _check_single_zone(self, zone_id: str) -> None:
         """Check a single zone and update its state."""
@@ -100,11 +121,13 @@ class ZoneMonitor:
             await self._update_zone_state(zone_id, status, zone_name, details)
         except Exception as e:
             self.logger.error(f"Failed to check zone {zone_id}: {e}")
-            # Treat failed checks as offline
-            await self._update_zone_state(zone_id, "offline", self.zone_names.get(zone_id, zone_id), {})
+            # Don't mark as offline if it's a rate limit error
+            if "rate limited" not in str(e).lower():
+                await self._update_zone_state(zone_id, "offline", self.zone_names.get(zone_id, zone_id), {})
     
     async def _check_zone_status(self, zone_id: str) -> Tuple[str, str, Dict]:
-        """Check detailed status of a specific zone using SYB GraphQL API."""
+        """Check detailed status of a specific zone using simplified query."""
+        # Simplified query to reduce token cost
         query = """
         query GetZoneStatus($zoneId: ID!) {
             soundZone(id: $zoneId) {
@@ -112,13 +135,7 @@ class ZoneMonitor:
                 name
                 isPaired
                 online
-                device {
-                    id
-                    name
-                    softwareVersion
-                }
                 subscription {
-                    isActive
                     state
                 }
             }
@@ -127,21 +144,39 @@ class ZoneMonitor:
         
         variables = {"zoneId": zone_id}
         
-        # Reduce retries to avoid hitting rate limits
-        max_retries = 1  # Only 1 retry for rate limit errors
-        
-        for attempt in range(max_retries):
+        # Single retry with exponential backoff
+        for attempt in range(2):
             try:
                 response = await self.client.post(
                     self.config.syb_api_url,
                     json={"query": query, "variables": variables},
-                    timeout=10.0  # Reduce timeout to 10 seconds
+                    timeout=10.0
                 )
                 response.raise_for_status()
                 
                 data = response.json()
                 
                 if "errors" in data:
+                    error_msg = str(data['errors'])
+                    
+                    # Parse rate limit info
+                    if "rate limited" in error_msg.lower():
+                        # Extract token info if available
+                        import re
+                        tokens_match = re.search(r'costs (\d+) tokens.*have (\d+) available', error_msg)
+                        if tokens_match:
+                            cost = int(tokens_match.group(1))
+                            available = int(tokens_match.group(2))
+                            self.available_tokens = available
+                            
+                            # Set rate limit reset (usually 1 minute)
+                            self.rate_limit_reset = datetime.now() + timedelta(seconds=60)
+                        
+                        # Don't retry rate limit errors immediately
+                        if attempt == 0:
+                            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                            continue
+                    
                     raise Exception(f"GraphQL errors: {data['errors']}")
                 
                 zone_data = data.get("data", {}).get("soundZone")
@@ -151,44 +186,40 @@ class ZoneMonitor:
                 zone_name = zone_data.get("name", zone_id)
                 is_paired = zone_data.get("isPaired", False)
                 online = zone_data.get("online", False)
-                device = zone_data.get("device")
                 subscription = zone_data.get("subscription", {})
-                subscription_active = subscription.get("isActive", True) if subscription else True
                 subscription_state = subscription.get("state") if subscription else None
-                software_version = device.get("softwareVersion") if device else None
                 
-                # Determine detailed status based on 6 levels
-                status = self._determine_zone_status(is_paired, online, device, subscription_active, subscription_state, software_version)
+                # Simplified status determination
+                if not is_paired:
+                    status = "unpaired"
+                elif subscription_state is None:
+                    status = "no_subscription"
+                elif subscription_state in ["EXPIRED", "CANCELLED"]:
+                    status = "expired"
+                elif online:
+                    status = "online"
+                else:
+                    status = "offline"
                 
                 details = {
                     "isPaired": is_paired,
                     "online": online,
-                    "hasDevice": device is not None,
-                    "deviceName": device.get("name") if device else None,
-                    "subscriptionActive": subscription_active,
-                    "subscriptionState": subscription_state,
-                    "softwareVersion": software_version
+                    "subscriptionState": subscription_state
                 }
                 
-                self.logger.debug(f"Zone {zone_name}: status={status}, details={details}")
+                # Update available tokens on success
+                self.available_tokens = max(0, self.available_tokens - 8)  # Simplified query costs less
+                
                 return status, zone_name, details
                 
             except Exception as e:
-                error_msg = str(e)
                 self.logger.warning(f"Attempt {attempt + 1} failed for zone {zone_id}: {e}")
-                
-                # Don't retry rate limit errors
-                if "rate limited" in error_msg.lower():
-                    raise
-                
-                if attempt < max_retries - 1:
-                    # Exponential backoff
-                    wait_time = 2 ** attempt  # 1s, 2s, 4s...
-                    await asyncio.sleep(wait_time)
+                if attempt < 1 and "rate limited" not in str(e).lower():
+                    await asyncio.sleep(1)
                 else:
                     raise
     
-    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str, software_version: float) -> str:
+    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str) -> str:
         """Determine zone status based on 5 levels."""
         # Level 5: No paired device (explicitly not paired)
         if not is_paired:
