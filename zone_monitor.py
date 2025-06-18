@@ -85,9 +85,11 @@ class ZoneMonitor:
                 device {
                     id
                     name
+                    softwareVersion
                 }
                 subscription {
                     isActive
+                    state
                 }
             }
         }
@@ -122,16 +124,20 @@ class ZoneMonitor:
                 device = zone_data.get("device")
                 subscription = zone_data.get("subscription", {})
                 subscription_active = subscription.get("isActive", True) if subscription else True
+                subscription_state = subscription.get("state") if subscription else None
+                software_version = device.get("softwareVersion") if device else None
                 
-                # Determine detailed status based on 4 levels
-                status = self._determine_zone_status(is_paired, online, device, subscription_active)
+                # Determine detailed status based on 6 levels
+                status = self._determine_zone_status(is_paired, online, device, subscription_active, subscription_state, software_version)
                 
                 details = {
                     "isPaired": is_paired,
                     "online": online,
                     "hasDevice": device is not None,
                     "deviceName": device.get("name") if device else None,
-                    "subscriptionActive": subscription_active
+                    "subscriptionActive": subscription_active,
+                    "subscriptionState": subscription_state,
+                    "softwareVersion": software_version
                 }
                 
                 self.logger.debug(f"Zone {zone_name}: status={status}, details={details}")
@@ -146,17 +152,31 @@ class ZoneMonitor:
                 else:
                     raise
     
-    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool) -> str:
-        """Determine zone status based on the 4 levels."""
-        # Level 4: No paired device
+    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str, software_version: float) -> str:
+        """Determine zone status based on the 6 levels."""
+        # Level 6: No paired device
         if not is_paired or device is None:
             return "unpaired"
         
-        # Level 3: Subscription expired
-        if not subscription_active:
+        # Level 5: No subscription
+        if subscription_state is None:
+            return "no_subscription"
+        
+        # Level 4: Subscription expired
+        if subscription_state == "EXPIRED" or (subscription_state != "ACTIVE" and not subscription_active):
             return "expired"
         
-        # Level 1 & 2: Device is paired and subscription active
+        # Level 3: App outdated (minimum version is 236.0)
+        minimum_version = 236.0
+        if software_version:
+            try:
+                version_float = float(software_version)
+                if version_float < minimum_version:
+                    return "outdated"
+            except (ValueError, TypeError):
+                pass
+        
+        # Level 1 & 2: Device is paired, subscription active, app up to date
         if online:
             return "online"    # Level 1: Paired and online
         else:
@@ -197,6 +217,10 @@ class ZoneMonitor:
                     self.logger.warning(f"Zone {zone_name} subscription expired")
                 elif status == "unpaired":
                     self.logger.warning(f"Zone {zone_name} has no paired device")
+                elif status == "no_subscription":
+                    self.logger.warning(f"Zone {zone_name} has no subscription")
+                elif status == "outdated":
+                    self.logger.warning(f"Zone {zone_name} app needs update")
     
     def get_offline_zones(self) -> Dict[str, timedelta]:
         """Get zones that are currently offline with their offline duration."""
@@ -215,11 +239,13 @@ class ZoneMonitor:
     
     def get_zone_status_summary(self) -> str:
         """Get a summary of zone statuses."""
-        status_counts = {"online": 0, "offline": 0, "expired": 0, "unpaired": 0}
+        status_counts = {"online": 0, "offline": 0, "expired": 0, "unpaired": 0, "no_subscription": 0, "outdated": 0}
         for status in self.zone_states.values():
             status_counts[status] = status_counts.get(status, 0) + 1
         
-        return f"{status_counts['online']} online, {status_counts['offline']} offline, {status_counts['expired']} expired, {status_counts['unpaired']} unpaired"
+        return (f"{status_counts['online']} online, {status_counts['offline']} offline, "
+                f"{status_counts['outdated']} outdated, {status_counts['expired']} expired, "
+                f"{status_counts['no_subscription']} no subscription, {status_counts['unpaired']} unpaired")
     
     def get_detailed_status(self) -> Dict:
         """Get detailed status information for all zones."""
@@ -262,7 +288,9 @@ class ZoneMonitor:
             "online": "Online",
             "offline": "Offline",
             "expired": "Subscription Expired",
-            "unpaired": "No Device Paired"
+            "unpaired": "No Device Paired",
+            "no_subscription": "No Subscription",
+            "outdated": "App Update Required"
         }
         return labels.get(status, status.title())
     
