@@ -153,36 +153,24 @@ class ZoneMonitor:
                     raise
     
     def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str, software_version: float) -> str:
-        """Determine zone status based on the 6 levels."""
-        # Level 6: No paired device
+        """Determine zone status based on 5 levels."""
+        # Level 5: No paired device
         if not is_paired or device is None:
             return "unpaired"
         
-        # Level 5: No subscription
+        # Level 4: No subscription
         if subscription_state is None:
             return "no_subscription"
         
-        # Level 4: Subscription expired
+        # Level 3: Subscription expired
         if subscription_state == "EXPIRED" or (subscription_state != "ACTIVE" and not subscription_active):
             return "expired"
         
-        # Now check online/offline status first before checking app version
-        # Level 2: Paired but offline (regardless of app version)
-        if not online:
-            return "offline"
-        
-        # Level 3: Online but app outdated (minimum version is 236.0)
-        minimum_version = 236.0
-        if software_version:
-            try:
-                version_float = float(software_version)
-                if version_float < minimum_version:
-                    return "outdated"
-            except (ValueError, TypeError):
-                pass
-        
-        # Level 1: Paired, online, and app up to date
-        return "online"
+        # Level 1 & 2: Device is paired and subscription active
+        if online:
+            return "online"    # Level 1: Paired and online
+        else:
+            return "offline"   # Level 2: Paired but offline
     
     async def _update_zone_state(self, zone_id: str, status: str, zone_name: str, details: Dict) -> None:
         """Update the internal state for a zone."""
@@ -192,7 +180,7 @@ class ZoneMonitor:
         self.zone_states[zone_id] = status
         
         # Only track offline timing for zones that should be working (paired with active subscription)
-        should_track_offline = status in ["online", "offline", "outdated"]
+        should_track_offline = status in ["online", "offline"]
         
         if status == "online":
             # Zone is online and working
@@ -221,8 +209,6 @@ class ZoneMonitor:
                     self.logger.warning(f"Zone {zone_name} has no paired device")
                 elif status == "no_subscription":
                     self.logger.warning(f"Zone {zone_name} has no subscription")
-                elif status == "outdated":
-                    self.logger.warning(f"Zone {zone_name} app needs update")
     
     def get_offline_zones(self) -> Dict[str, timedelta]:
         """Get zones that are currently offline with their offline duration."""
@@ -241,12 +227,12 @@ class ZoneMonitor:
     
     def get_zone_status_summary(self) -> str:
         """Get a summary of zone statuses."""
-        status_counts = {"online": 0, "offline": 0, "expired": 0, "unpaired": 0, "no_subscription": 0, "outdated": 0}
+        status_counts = {"online": 0, "offline": 0, "expired": 0, "unpaired": 0, "no_subscription": 0}
         for status in self.zone_states.values():
             status_counts[status] = status_counts.get(status, 0) + 1
         
         return (f"{status_counts['online']} online, {status_counts['offline']} offline, "
-                f"{status_counts['outdated']} outdated, {status_counts['expired']} expired, "
+                f"{status_counts['expired']} expired, "
                 f"{status_counts['no_subscription']} no subscription, {status_counts['unpaired']} unpaired")
     
     def get_detailed_status(self) -> Dict:
@@ -291,8 +277,7 @@ class ZoneMonitor:
             "offline": "Offline",
             "expired": "Subscription Expired",
             "unpaired": "No Device Paired",
-            "no_subscription": "No Subscription",
-            "outdated": "App Update Required"
+            "no_subscription": "No Subscription"
         }
         return labels.get(status, status.title())
     

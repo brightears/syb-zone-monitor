@@ -163,7 +163,6 @@ class DashboardServer:
         total_expired = sum(acc.get('expired_zones', 0) for acc in accounts_list)
         total_unpaired = sum(acc.get('unpaired_zones', 0) for acc in accounts_list)
         total_no_subscription = sum(acc.get('no_subscription_zones', 0) for acc in accounts_list)
-        total_outdated = sum(acc.get('outdated_zones', 0) for acc in accounts_list)
         
         return {
             "accounts": accounts_list,
@@ -175,7 +174,6 @@ class DashboardServer:
                 "total_expired": total_expired,
                 "total_unpaired": total_unpaired,
                 "total_no_subscription": total_no_subscription,
-                "total_outdated": total_outdated,
                 "last_updated": datetime.now().isoformat()
             }
         }
@@ -504,7 +502,6 @@ class DashboardServer:
         .status-expired { background: #ff9500; }
         .status-unpaired { background: #8e8e93; }
         .status-no_subscription { background: #5856d6; }
-        .status-outdated { background: #af52de; }
         .status-total { background: #007aff; }
         
         .controls {
@@ -645,11 +642,6 @@ class DashboardServer:
         .zone-card.no_subscription {
             border-left: 3px solid #5856d6;
             background: #f5f5ff;
-        }
-        
-        .zone-card.outdated {
-            border-left: 3px solid #af52de;
-            background: #faf5ff;
         }
         
         .zone-name {
@@ -892,10 +884,6 @@ class DashboardServer:
                 <span id="no-subscription-zones">0</span> No Subscription
             </div>
             <div class="summary-item">
-                <span class="status-dot status-outdated"></span>
-                <span id="outdated-zones">0</span> App Outdated
-            </div>
-            <div class="summary-item">
                 <span id="accounts-count">0</span> Accounts
             </div>
         </div>
@@ -911,7 +899,6 @@ class DashboardServer:
                 <button class="filter-btn" data-filter="expired">Expired</button>
                 <button class="filter-btn" data-filter="unpaired">Unpaired</button>
                 <button class="filter-btn" data-filter="no_subscription">No Subscription</button>
-                <button class="filter-btn" data-filter="outdated">App Outdated</button>
             </div>
             <button class="filter-btn" id="notifications-btn" style="background: #007aff; color: white; border-color: #007aff;">📧 Send Notifications</button>
             <div class="auto-refresh">
@@ -995,7 +982,6 @@ class DashboardServer:
             document.getElementById('expired-zones').textContent = summary.total_expired || 0;
             document.getElementById('unpaired-zones').textContent = summary.total_unpaired || 0;
             document.getElementById('no-subscription-zones').textContent = summary.total_no_subscription || 0;
-            document.getElementById('outdated-zones').textContent = summary.total_outdated || 0;
             document.getElementById('accounts-count').textContent = summary.total_accounts;
         }
 
@@ -1025,7 +1011,6 @@ class DashboardServer:
                             ${(account.expired_zones || 0) > 0 ? `<span style="color: #ff9500;">${account.expired_zones} expired</span>` : ''}
                             ${(account.unpaired_zones || 0) > 0 ? `<span style="color: #8e8e93;">${account.unpaired_zones} unpaired</span>` : ''}
                             ${(account.no_subscription_zones || 0) > 0 ? `<span style="color: #5856d6;">${account.no_subscription_zones} no subscription</span>` : ''}
-                            ${(account.outdated_zones || 0) > 0 ? `<span style="color: #af52de;">${account.outdated_zones} app outdated</span>` : ''}
                             <button class="notify-account-btn" onclick="openAccountNotification('${account.account_name}')" style="margin-left: 1rem; padding: 0.3rem 0.8rem; background: #007aff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">📧 Notify</button>
                         </div>
                     </div>
@@ -1037,8 +1022,7 @@ class DashboardServer:
                                 (currentFilter === 'offline' && zone.status === 'offline') ||
                                 (currentFilter === 'expired' && zone.status === 'expired') ||
                                 (currentFilter === 'unpaired' && zone.status === 'unpaired') ||
-                                (currentFilter === 'no_subscription' && zone.status === 'no_subscription') ||
-                                (currentFilter === 'outdated' && zone.status === 'outdated');
+                                (currentFilter === 'no_subscription' && zone.status === 'no_subscription');
                             
                             const matchesSearch = 
                                 zone.name.toLowerCase().includes(currentSearch.toLowerCase()) ||
@@ -1060,8 +1044,6 @@ class DashboardServer:
                                         `<div class="zone-offline-time">Offline for ${zone.offline_duration_minutes} minutes</div>` : ''}
                                     ${zone.details && zone.details.deviceName ? 
                                         `<div class="zone-offline-time" style="color: #666;">Device: ${zone.details.deviceName}</div>` : ''}
-                                    ${status === 'outdated' && zone.details && zone.details.softwareVersion ? 
-                                        `<div class="zone-offline-time" style="color: #af52de;">App version: ${zone.details.softwareVersion} (update required)</div>` : ''}
                                 </div>
                             `;
                         }).join('')}
@@ -1080,8 +1062,7 @@ class DashboardServer:
                         (currentFilter === 'offline' && zone.status === 'offline') ||
                         (currentFilter === 'expired' && zone.status === 'expired') ||
                         (currentFilter === 'unpaired' && zone.status === 'unpaired') ||
-                        (currentFilter === 'no_subscription' && zone.status === 'no_subscription') ||
-                        (currentFilter === 'outdated' && zone.status === 'outdated');
+                        (currentFilter === 'no_subscription' && zone.status === 'no_subscription');
                     
                     const matchesSearch = 
                         zone.name.toLowerCase().includes(currentSearch.toLowerCase()) ||

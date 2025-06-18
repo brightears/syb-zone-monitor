@@ -399,11 +399,6 @@ async def dashboard():
             color: white;
         }
         
-        .status-outdated {
-            background: #af52de;
-            color: white;
-        }
-        
         .status-unknown {
             background: #e5e5e5;
             color: #666666;
@@ -640,7 +635,6 @@ async def dashboard():
             <button class="filter-btn" data-filter="issues">With Issues</button>
             <button class="filter-btn" data-filter="offline">Offline</button>
             <button class="filter-btn" data-filter="no-device">No Device</button>
-            <button class="filter-btn" data-filter="outdated">Outdated</button>
             <button class="filter-btn" data-filter="no-subscription">No Sub</button>
         </div>
     </div>
@@ -745,8 +739,6 @@ async def dashboard():
                     return account.zones.some(z => z.status === 'offline');
                 } else if (currentFilter === 'no-device') {
                     return account.zones.some(z => z.status === 'unpaired');
-                } else if (currentFilter === 'outdated') {
-                    return account.zones.some(z => z.status === 'outdated');
                 } else if (currentFilter === 'no-subscription') {
                     return account.zones.some(z => z.status === 'no_subscription');
                 }
@@ -781,7 +773,6 @@ async def dashboard():
             const unpairedCount = account.zones.filter(z => z.status === 'unpaired').length;
             const expiredCount = account.zones.filter(z => z.status === 'expired').length;
             const noSubCount = account.zones.filter(z => z.status === 'no_subscription').length;
-            const outdatedCount = account.zones.filter(z => z.status === 'outdated').length;
             
             return `
                 <div class="account-card">
@@ -791,7 +782,6 @@ async def dashboard():
                             <div class="account-stats">
                                 <span>${account.zones.length} zones</span>
                                 ${offlineCount > 0 ? `<span style="color: #ef4444">${offlineCount} offline</span>` : ''}
-                                ${outdatedCount > 0 ? `<span style="color: #af52de">${outdatedCount} outdated</span>` : ''}
                                 ${expiredCount > 0 ? `<span style="color: #6b7280">${expiredCount} expired</span>` : ''}
                                 ${noSubCount > 0 ? `<span style="color: #5856d6">${noSubCount} no sub</span>` : ''}
                                 ${unpairedCount > 0 ? `<span style="color: #f59e0b">${unpairedCount} unpaired</span>` : ''}
@@ -839,10 +829,6 @@ async def dashboard():
                     statusText = 'No Subscription';
                     statusIcon = '💳';
                     break;
-                case 'outdated':
-                    statusText = 'App Update Required';
-                    statusIcon = '📱';
-                    break;
                 case 'unknown':
                     statusText = 'Checking...';
                     statusIcon = '⋯';
@@ -856,11 +842,6 @@ async def dashboard():
             if (zone.status === 'offline' && zone.offline_duration) {
                 const duration = formatDuration(zone.offline_duration);
                 durationText = `<div class="zone-duration">${duration}</div>`;
-            }
-            
-            // Add software version for outdated zones
-            if (zone.status === 'outdated' && zone.software_version) {
-                durationText = `<div class="zone-duration" style="color: #af52de;">Version ${zone.software_version}</div>`;
             }
             
             return `
@@ -1162,9 +1143,6 @@ async def get_zones():
                     elif zone_status == 'no_subscription':
                         status = 'no_subscription'
                         has_issues = True
-                    elif zone_status == 'outdated':
-                        status = 'outdated'
-                        has_issues = True
                 else:
                     # Zone hasn't been checked yet - mark as having issues so we can track it
                     has_issues = True
@@ -1180,10 +1158,6 @@ async def get_zones():
                 if offline_duration is not None:
                     zone_data['offline_duration'] = offline_duration
                 
-                # Add zone details if available
-                zone_details = zone_monitor.zone_details.get(zone_id, {})
-                if zone_details.get('softwareVersion') and status == 'outdated':
-                    zone_data['software_version'] = zone_details['softwareVersion']
                 
                 account_zones.append(zone_data)
         
