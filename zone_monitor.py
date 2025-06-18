@@ -8,7 +8,11 @@ from typing import Dict, Optional, Tuple
 import httpx
 
 from config import Config
-from database import get_database
+try:
+    from database import get_database
+except ImportError:
+    # Fallback to compatible version
+    from database_compat import get_database
 
 
 class ZoneMonitor:
