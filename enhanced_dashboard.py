@@ -1016,69 +1016,78 @@ async def dashboard():
                     break;
                     
                 case 'expired':
+                    message = `Dear ${account.name} team,\n\n`;
                     if (expiredZones.length > 0) {
-                        message = `Dear ${account.name} team,\n\n`;
                         message += `We noticed that your Soundtrack Your Brand subscription has expired for the following ${expiredZones.length} zone${expiredZones.length > 1 ? 's' : ''}:\n\n`;
                         expiredZones.forEach(z => {
                             message += `• ${z.name}\n`;
                         });
-                        message += `\nYour music service has been temporarily suspended for these zones. To avoid any disruption to your business atmosphere:\n\n`;
-                        message += `📅 Renew Now: Contact our team to quickly reactivate your subscription\n`;
-                        message += `💳 Flexible Plans: We offer various subscription options to fit your needs\n`;
-                        message += `🎵 Instant Reactivation: Your music will resume immediately upon renewal\n\n`;
-                        message += `Don't let silence impact your customer experience. Our account team is ready to help you get back to playing the perfect soundtrack for your business.\n\n`;
-                        message += `To renew your subscription or discuss your options, please:\n`;
-                        message += `• Reply to this email\n`;
-                        message += `• Call our support team\n`;
-                        message += `• Visit your account dashboard\n\n`;
-                        message += `Thank you for choosing Soundtrack Your Brand. We look forward to continuing to serve your music needs.\n\n`;
-                        message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    } else {
+                        message += `We noticed that your Soundtrack Your Brand subscription has expired for the following zones:\n\n`;
+                        message += `• [Zone names will be listed here]\n`;
                     }
+                    message += `\nYour music service has been temporarily suspended for these zones. To avoid any disruption to your business atmosphere:\n\n`;
+                    message += `📅 Renew Now: Contact our team to quickly reactivate your subscription\n`;
+                    message += `💳 Flexible Plans: We offer various subscription options to fit your needs\n`;
+                    message += `🎵 Instant Reactivation: Your music will resume immediately upon renewal\n\n`;
+                    message += `Don't let silence impact your customer experience. Our account team is ready to help you get back to playing the perfect soundtrack for your business.\n\n`;
+                    message += `To renew your subscription or discuss your options, please:\n`;
+                    message += `• Reply to this email\n`;
+                    message += `• Call our support team\n`;
+                    message += `• Visit your account dashboard\n\n`;
+                    message += `Thank you for choosing Soundtrack Your Brand. We look forward to continuing to serve your music needs.\n\n`;
+                    message += `Best regards,\nSoundtrack Your Brand Support Team`;
                     break;
                     
                 case 'unpaired':
+                    message = `Dear ${account.name} team,\n\n`;
                     if (unpairedZones.length > 0) {
-                        message = `Dear ${account.name} team,\n\n`;
                         message += `We've identified ${unpairedZones.length} zone${unpairedZones.length > 1 ? 's' : ''} in your account that ${unpairedZones.length > 1 ? 'are' : 'is'} not connected to any playback device:\n\n`;
                         unpairedZones.forEach(z => {
                             message += `• ${z.name}\n`;
                         });
-                        message += `\nThese zones are ready to play music but need a device to stream from. Here's how to get started:\n\n`;
-                        message += `📱 Quick Setup Guide:\n`;
-                        message += `1. Download the Soundtrack Player app on your chosen device (tablet, phone, or computer)\n`;
-                        message += `2. Log in with your Soundtrack Your Brand credentials\n`;
-                        message += `3. Select the zone you want to pair\n`;
-                        message += `4. Start playing your curated playlists!\n\n`;
-                        message += `🔧 Recommended Devices:\n`;
-                        message += `• iPad or Android tablet (dedicated music device)\n`;
-                        message += `• Spare smartphone\n`;
-                        message += `• Computer or laptop\n`;
-                        message += `• Soundtrack hardware player (contact us for options)\n\n`;
-                        message += `Need help with setup? Our support team can walk you through the process step-by-step. We're just an email or phone call away.\n\n`;
-                        message += `Let's get your music playing and enhance your customer experience today!\n\n`;
-                        message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    } else {
+                        message += `We've identified zones in your account that are not connected to any playback device:\n\n`;
+                        message += `• [Zone names will be listed here]\n`;
                     }
+                    message += `\nThese zones are ready to play music but need a device to stream from. Here's how to get started:\n\n`;
+                    message += `📱 Quick Setup Guide:\n`;
+                    message += `1. Download the Soundtrack Player app on your chosen device (tablet, phone, or computer)\n`;
+                    message += `2. Log in with your Soundtrack Your Brand credentials\n`;
+                    message += `3. Select the zone you want to pair\n`;
+                    message += `4. Start playing your curated playlists!\n\n`;
+                    message += `🔧 Recommended Devices:\n`;
+                    message += `• iPad or Android tablet (dedicated music device)\n`;
+                    message += `• Spare smartphone\n`;
+                    message += `• Computer or laptop\n`;
+                    message += `• Soundtrack hardware player (contact us for options)\n\n`;
+                    message += `Need help with setup? Our support team can walk you through the process step-by-step. We're just an email or phone call away.\n\n`;
+                    message += `Let's get your music playing and enhance your customer experience today!\n\n`;
+                    message += `Best regards,\nSoundtrack Your Brand Support Team`;
                     break;
                     
                 case 'no_subscription':
+                    message = `Dear ${account.name} team,\n\n`;
                     if (noSubZones.length > 0) {
-                        message = `Dear ${account.name} team,\n\n`;
                         message += `We've noticed that ${noSubZones.length} zone${noSubZones.length > 1 ? 's' : ''} in your account ${noSubZones.length > 1 ? 'do' : 'does'} not have an active subscription:\n\n`;
                         noSubZones.forEach(z => {
                             message += `• ${z.name}\n`;
                         });
-                        message += `\nThese zones are set up but require a subscription to start playing music. Here's how we can help:\n\n`;
-                        message += `🎵 Start Your Musical Journey:\n`;
-                        message += `• Choose from our flexible subscription plans\n`;
-                        message += `• Access thousands of licensed tracks perfect for your business\n`;
-                        message += `• Create the perfect atmosphere for your customers\n`;
-                        message += `• Enjoy legal, commercial-use music without worry\n\n`;
-                        message += `💼 Special Offer for New Subscriptions:\n`;
-                        message += `Contact us today to learn about our current promotions and find the perfect plan for your business needs.\n\n`;
-                        message += `Ready to transform your space with the power of music? Our team is standing by to help you get started. Simply reply to this email or give us a call.\n\n`;
-                        message += `We're excited to help you create the perfect soundtrack for your business!\n\n`;
-                        message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    } else {
+                        message += `We've noticed that zones in your account do not have an active subscription:\n\n`;
+                        message += `• [Zone names will be listed here]\n`;
                     }
+                    message += `\nThese zones are set up but require a subscription to start playing music. Here's how we can help:\n\n`;
+                    message += `🎵 Start Your Musical Journey:\n`;
+                    message += `• Choose from our flexible subscription plans\n`;
+                    message += `• Access thousands of licensed tracks perfect for your business\n`;
+                    message += `• Create the perfect atmosphere for your customers\n`;
+                    message += `• Enjoy legal, commercial-use music without worry\n\n`;
+                    message += `💼 Special Offer for New Subscriptions:\n`;
+                    message += `Contact us today to learn about our current promotions and find the perfect plan for your business needs.\n\n`;
+                    message += `Ready to transform your space with the power of music? Our team is standing by to help you get started. Simply reply to this email or give us a call.\n\n`;
+                    message += `We're excited to help you create the perfect soundtrack for your business!\n\n`;
+                    message += `Best regards,\nSoundtrack Your Brand Support Team`;
                     break;
                     
                 case 'custom':
