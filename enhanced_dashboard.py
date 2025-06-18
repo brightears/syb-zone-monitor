@@ -1134,9 +1134,10 @@ async def dashboard():
         
         function renderContact(contact, checked) {
             const hasPhone = contact.phone && contact.phone !== '';
+            const safeId = contact.email.replace(/[@.]/g, '_');
             return `
                 <div class="contact-item">
-                    <input type="checkbox" id="contact_${contact.email}" 
+                    <input type="checkbox" id="contact_${safeId}" 
                            value="${contact.email}" 
                            data-phone="${contact.phone || ''}"
                            data-has-phone="${hasPhone}"
@@ -1168,7 +1169,7 @@ async def dashboard():
             
             // Collect selected contacts and their info
             document.querySelectorAll('#modalBody input[type="checkbox"]:checked').forEach(checkbox => {
-                if (checkbox.id.startsWith('contact_')) {
+                if (checkbox.id && checkbox.id.startsWith('contact_')) {
                     const email = checkbox.value;
                     const phone = checkbox.dataset.phone;
                     const hasPhone = checkbox.dataset.hasPhone === 'true';
