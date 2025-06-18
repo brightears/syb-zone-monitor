@@ -143,6 +143,10 @@ async def startup_event():
         )
         
         zone_monitor = ZoneMonitor(mock_config)
+        
+        # Initialize database and load saved states
+        await zone_monitor.initialize()
+        
         logger.info(f"Initialized zone monitor with {len(zone_ids)} zones")
         
         # Start background task to check zones periodically

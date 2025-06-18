@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple
 import httpx
 
 from config import Config
+from database import get_database
 
 
 class ZoneMonitor:
@@ -23,6 +24,7 @@ class ZoneMonitor:
         self.zone_details: Dict[str, Dict] = {} # zone_id -> detailed info
         self.offline_since: Dict[str, datetime] = {}  # zone_id -> offline_start_time
         self.last_check_time: Optional[datetime] = None
+        self.db = None  # Database instance
         
         # HTTP client with retry logic
         self.client = httpx.AsyncClient(
@@ -32,6 +34,26 @@ class ZoneMonitor:
                 "Content-Type": "application/json"
             }
         )
+    
+    async def initialize(self):
+        """Initialize database and load saved states."""
+        self.db = await get_database()
+        
+        if self.db:
+            # Load saved states from database
+            saved_states = await self.db.load_all_zone_states()
+            
+            for zone_id, state_data in saved_states.items():
+                # Restore state from database
+                self.zone_states[zone_id] = state_data['status']
+                self.zone_names[zone_id] = state_data['zone_name']
+                self.zone_details[zone_id] = state_data['details'] or {}
+                
+                # Restore offline tracking
+                if state_data['status'] == 'offline' and state_data['offline_since']:
+                    self.offline_since[zone_id] = state_data['offline_since']
+            
+            self.logger.info(f"Loaded {len(saved_states)} zone states from database")
     
     async def check_zones(self) -> None:
         """Check status of all configured zones."""
@@ -186,6 +208,9 @@ class ZoneMonitor:
         previous_state = self.zone_states.get(zone_id)
         self.zone_states[zone_id] = status
         
+        # Extract account name from zone name pattern
+        account_name = self._determine_account_name(zone_name)
+        
         # Only track offline timing for zones that should be working (paired with active subscription)
         should_track_offline = status in ["online", "offline"]
         
@@ -216,6 +241,18 @@ class ZoneMonitor:
                     self.logger.warning(f"Zone {zone_name} has no paired device")
                 elif status == "no_subscription":
                     self.logger.warning(f"Zone {zone_name} has no subscription")
+        
+        # Save to database if available
+        if self.db:
+            offline_since = self.offline_since.get(zone_id) if status == "offline" else None
+            await self.db.save_zone_status(
+                zone_id=zone_id,
+                zone_name=zone_name,
+                status=status,
+                details=details,
+                offline_since=offline_since,
+                account_name=account_name
+            )
     
     def get_offline_zones(self) -> Dict[str, timedelta]:
         """Get zones that are currently offline with their offline duration."""
@@ -301,6 +338,15 @@ class ZoneMonitor:
         }
         return labels.get(status, status.title())
     
+    def _determine_account_name(self, zone_name: str) -> str:
+        """Extract account name from zone name."""
+        # Common patterns: "Account - Zone" or just use first part
+        if " - " in zone_name:
+            return zone_name.split(" - ")[0].strip()
+        return zone_name.split()[0] if zone_name else "Unknown"
+    
     async def close(self):
         """Clean up resources."""
         await self.client.aclose()
+        if self.db:
+            await self.db.close()
