@@ -85,6 +85,7 @@ class ZoneMonitor:
                 device {
                     id
                     name
+                    softwareVersion
                 }
                 subscription {
                     isActive
@@ -124,16 +125,19 @@ class ZoneMonitor:
                 subscription = zone_data.get("subscription", {})
                 subscription_active = subscription.get("isActive", True) if subscription else True
                 subscription_state = subscription.get("state") if subscription else None
+                software_version = device.get("softwareVersion") if device else None
                 
-                # Determine detailed status based on 5 levels
-                status = self._determine_zone_status(is_paired, online, device, subscription_active, subscription_state)
+                # Determine detailed status based on 6 levels
+                status = self._determine_zone_status(is_paired, online, device, subscription_active, subscription_state, software_version)
+                
                 details = {
                     "isPaired": is_paired,
                     "online": online,
                     "hasDevice": device is not None,
                     "deviceName": device.get("name") if device else None,
                     "subscriptionActive": subscription_active,
-                    "subscriptionState": subscription_state
+                    "subscriptionState": subscription_state,
+                    "softwareVersion": software_version
                 }
                 
                 self.logger.debug(f"Zone {zone_name}: status={status}, details={details}")
@@ -148,7 +152,7 @@ class ZoneMonitor:
                 else:
                     raise
     
-    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str) -> str:
+    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str, software_version: float) -> str:
         """Determine zone status based on 5 levels."""
         # Level 5: No paired device
         if not is_paired or device is None:
