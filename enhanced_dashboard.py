@@ -15,7 +15,12 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from zone_monitor_optimized import ZoneMonitor
-from sms_service import get_sms_service
+try:
+    from sms_service import get_sms_service
+except ImportError:
+    # SMS service not available yet
+    def get_sms_service():
+        return None
 import os
 from dotenv import load_dotenv
 
@@ -1454,7 +1459,7 @@ async def send_notification(data: dict):
         if send_sms and phones:
             sms_service = get_sms_service()
             
-            if sms_service.enabled:
+            if sms_service and hasattr(sms_service, 'enabled') and sms_service.enabled:
                 # Prepare zone data for SMS formatting
                 zones_data = []
                 for location in account_info.get('locations', []):
