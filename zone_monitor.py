@@ -166,7 +166,12 @@ class ZoneMonitor:
         if subscription_state == "EXPIRED" or (subscription_state != "ACTIVE" and not subscription_active):
             return "expired"
         
-        # Level 3: App outdated (minimum version is 236.0)
+        # Now check online/offline status first before checking app version
+        # Level 2: Paired but offline (regardless of app version)
+        if not online:
+            return "offline"
+        
+        # Level 3: Online but app outdated (minimum version is 236.0)
         minimum_version = 236.0
         if software_version:
             try:
@@ -176,11 +181,8 @@ class ZoneMonitor:
             except (ValueError, TypeError):
                 pass
         
-        # Level 1 & 2: Device is paired, subscription active, app up to date
-        if online:
-            return "online"    # Level 1: Paired and online
-        else:
-            return "offline"   # Level 2: Paired but offline
+        # Level 1: Paired, online, and app up to date
+        return "online"
     
     async def _update_zone_state(self, zone_id: str, status: str, zone_name: str, details: Dict) -> None:
         """Update the internal state for a zone."""
@@ -190,7 +192,7 @@ class ZoneMonitor:
         self.zone_states[zone_id] = status
         
         # Only track offline timing for zones that should be working (paired with active subscription)
-        should_track_offline = status in ["online", "offline"]
+        should_track_offline = status in ["online", "offline", "outdated"]
         
         if status == "online":
             # Zone is online and working
