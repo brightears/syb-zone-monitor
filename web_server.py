@@ -163,6 +163,7 @@ class DashboardServer:
         total_expired = sum(acc.get('expired_zones', 0) for acc in accounts_list)
         total_unpaired = sum(acc.get('unpaired_zones', 0) for acc in accounts_list)
         total_no_subscription = sum(acc.get('no_subscription_zones', 0) for acc in accounts_list)
+        total_checking = sum(acc.get('checking_zones', 0) for acc in accounts_list)
         
         return {
             "accounts": accounts_list,
@@ -174,6 +175,7 @@ class DashboardServer:
                 "total_expired": total_expired,
                 "total_unpaired": total_unpaired,
                 "total_no_subscription": total_no_subscription,
+                "total_checking": total_checking,
                 "last_updated": datetime.now().isoformat()
             }
         }
@@ -463,6 +465,12 @@ class DashboardServer:
             line-height: 1.4;
         }
         
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
         .header {
             background: white;
             border-bottom: 1px solid #d1d1d6;
@@ -503,6 +511,7 @@ class DashboardServer:
         .status-unpaired { background: #8e8e93; }
         .status-no_subscription { background: #5856d6; }
         .status-total { background: #007aff; }
+        .status-checking { background: #007aff; animation: pulse 1.5s infinite; }
         
         .controls {
             background: white;
@@ -642,6 +651,12 @@ class DashboardServer:
         .zone-card.no_subscription {
             border-left: 3px solid #5856d6;
             background: #f5f5ff;
+        }
+        
+        .zone-card.checking {
+            border-left: 3px solid #007aff;
+            background: #f0f7ff;
+            opacity: 0.8;
         }
         
         .zone-name {
@@ -883,6 +898,10 @@ class DashboardServer:
                 <span class="status-dot status-no_subscription"></span>
                 <span id="no-subscription-zones">0</span> No Subscription
             </div>
+            <div class="summary-item" id="checking-item" style="display: none;">
+                <span class="status-dot status-checking"></span>
+                <span id="checking-zones">0</span> Checking
+            </div>
             <div class="summary-item">
                 <span id="accounts-count">0</span> Accounts
             </div>
@@ -983,6 +1002,11 @@ class DashboardServer:
             document.getElementById('unpaired-zones').textContent = summary.total_unpaired || 0;
             document.getElementById('no-subscription-zones').textContent = summary.total_no_subscription || 0;
             document.getElementById('accounts-count').textContent = summary.total_accounts;
+            
+            // Handle checking status
+            const checkingCount = summary.total_checking || 0;
+            document.getElementById('checking-zones').textContent = checkingCount;
+            document.getElementById('checking-item').style.display = checkingCount > 0 ? 'flex' : 'none';
         }
 
         function renderAccounts(accounts) {
@@ -1011,6 +1035,7 @@ class DashboardServer:
                             ${(account.expired_zones || 0) > 0 ? `<span style="color: #ff9500;">${account.expired_zones} expired</span>` : ''}
                             ${(account.unpaired_zones || 0) > 0 ? `<span style="color: #8e8e93;">${account.unpaired_zones} unpaired</span>` : ''}
                             ${(account.no_subscription_zones || 0) > 0 ? `<span style="color: #5856d6;">${account.no_subscription_zones} no subscription</span>` : ''}
+                            ${(account.checking_zones || 0) > 0 ? `<span style="color: #007aff;">${account.checking_zones} checking</span>` : ''}
                             <button class="notify-account-btn" onclick="openAccountNotification('${account.account_name}')" style="margin-left: 1rem; padding: 0.3rem 0.8rem; background: #007aff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">📧 Notify</button>
                         </div>
                     </div>
@@ -1022,7 +1047,8 @@ class DashboardServer:
                                 (currentFilter === 'offline' && zone.status === 'offline') ||
                                 (currentFilter === 'expired' && zone.status === 'expired') ||
                                 (currentFilter === 'unpaired' && zone.status === 'unpaired') ||
-                                (currentFilter === 'no_subscription' && zone.status === 'no_subscription');
+                                (currentFilter === 'no_subscription' && zone.status === 'no_subscription') ||
+                                (currentFilter === 'checking' && zone.status === 'checking');
                             
                             const matchesSearch = 
                                 zone.name.toLowerCase().includes(currentSearch.toLowerCase()) ||

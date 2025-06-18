@@ -234,13 +234,25 @@ class ZoneMonitor:
     
     def get_zone_status_summary(self) -> str:
         """Get a summary of zone statuses."""
-        status_counts = {"online": 0, "offline": 0, "expired": 0, "unpaired": 0, "no_subscription": 0}
+        status_counts = {"online": 0, "offline": 0, "expired": 0, "unpaired": 0, "no_subscription": 0, "checking": 0}
         for status in self.zone_states.values():
             status_counts[status] = status_counts.get(status, 0) + 1
         
-        return (f"{status_counts['online']} online, {status_counts['offline']} offline, "
-                f"{status_counts['expired']} expired, "
-                f"{status_counts['no_subscription']} no subscription, {status_counts['unpaired']} unpaired")
+        parts = []
+        if status_counts['online'] > 0:
+            parts.append(f"{status_counts['online']} online")
+        if status_counts['offline'] > 0:
+            parts.append(f"{status_counts['offline']} offline")
+        if status_counts['expired'] > 0:
+            parts.append(f"{status_counts['expired']} expired")
+        if status_counts['no_subscription'] > 0:
+            parts.append(f"{status_counts['no_subscription']} no subscription")
+        if status_counts['unpaired'] > 0:
+            parts.append(f"{status_counts['unpaired']} unpaired")
+        if status_counts['checking'] > 0:
+            parts.append(f"{status_counts['checking']} checking")
+        
+        return ", ".join(parts) if parts else "No zones"
     
     def get_detailed_status(self) -> Dict:
         """Get detailed status information for all zones."""
@@ -249,7 +261,7 @@ class ZoneMonitor:
         
         for zone_id in self.config.zone_ids:
             zone_name = self.zone_names.get(zone_id, zone_id)
-            zone_status = self.zone_states.get(zone_id, "offline")
+            zone_status = self.zone_states.get(zone_id, "checking")  # Default to "checking" instead of "offline"
             zone_details = self.zone_details.get(zone_id, {})
             
             # Map old 'online' field for backward compatibility
@@ -284,7 +296,8 @@ class ZoneMonitor:
             "offline": "Offline",
             "expired": "Subscription Expired",
             "unpaired": "No Device Paired",
-            "no_subscription": "No Subscription"
+            "no_subscription": "No Subscription",
+            "checking": "Checking..."
         }
         return labels.get(status, status.title())
     
