@@ -154,22 +154,15 @@ class ZoneMonitor:
     
     def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str, software_version: float) -> str:
         """Determine zone status based on 5 levels."""
-        # Level 5: No paired device (explicitly not paired)
-        if not is_paired:
+        # Level 5: No paired device
+        if not is_paired or device is None:
             return "unpaired"
         
-        # If isPaired is True but device data is missing, check subscription to determine status
-        if device is None:
-            if subscription_state is None:
-                return "no_subscription"  # Has pairing capability but no subscription
-            else:
-                return "unpaired"  # Device issue despite isPaired=True
-        
-        # Level 4: No subscription (has device but no subscription)
+        # Level 4: No subscription
         if subscription_state is None:
             return "no_subscription"
         
-        # Level 3: Subscription expired or cancelled
+        # Level 3: Subscription expired
         if subscription_state == "EXPIRED" or (subscription_state != "ACTIVE" and not subscription_active):
             return "expired"
         
