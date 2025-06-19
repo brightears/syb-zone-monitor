@@ -15,6 +15,12 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from zone_monitor_optimized import ZoneMonitor
+try:
+    from whatsapp_service import get_whatsapp_service
+except ImportError:
+    # WhatsApp service not available yet
+    def get_whatsapp_service():
+        return None
 import os
 from dotenv import load_dotenv
 
@@ -963,6 +969,16 @@ async def dashboard():
                     " placeholder="Your notification message will appear here..."></textarea>
                 </div>
                 
+                <div class="whatsapp-section" style="margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">
+                        <span style="font-size: 1.2rem;">📱</span> WhatsApp Notification (Optional)
+                    </h4>
+                    <input type="tel" id="whatsappNumber" placeholder="+60123456789" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.875rem; background: white;">
+                    <div style="font-size: 0.75rem; color: #666666; margin-top: 0.5rem;">
+                        Enter WhatsApp number with country code (e.g., +60 for Malaysia)
+                    </div>
+                </div>
+                
                 <div class="modal-actions">
                     <button class="btn-secondary" onclick="closeModal()">Cancel</button>
                     <button class="btn-primary" onclick="sendNotification('${accountId}')">
@@ -1124,10 +1140,11 @@ async def dashboard():
                 selectedEmails.push(checkbox.value);
             });
             
+            const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
             const message = document.getElementById('messageContent').value;
             
-            if (selectedEmails.length === 0) {
-                alert('Please select at least one contact');
+            if (selectedEmails.length === 0 && !whatsappNumber) {
+                alert('Please select at least one contact or enter a WhatsApp number');
                 return;
             }
             
@@ -1145,13 +1162,21 @@ async def dashboard():
                     body: JSON.stringify({
                         account_id: accountId,
                         emails: selectedEmails,
+                        whatsapp_number: whatsappNumber,
                         message: message
                     })
                 });
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert('Notification sent successfully!');
+                    let successMsg = 'Notification sent successfully!\\n\\n';
+                    if (result.email_sent) {
+                        successMsg += '✅ Email sent to ' + result.email_sent + ' recipient(s)\\n';
+                    }
+                    if (result.whatsapp_sent) {
+                        successMsg += '✅ WhatsApp message sent\\n';
+                    }
+                    alert(successMsg);
                     closeModal();
                 } else {
                     alert('Failed to send notification: ' + result.message);
@@ -1275,11 +1300,18 @@ async def send_notification(data: dict):
     """Send notification for an account."""
     account_id = data.get('account_id')
     emails = data.get('emails', [])
+    whatsapp_number = data.get('whatsapp_number', '')
     message = data.get('message', '')
     
-    if not account_id or not emails:
+    if not account_id:
         return JSONResponse(
-            content={'success': False, 'message': 'Missing account_id or emails'},
+            content={'success': False, 'message': 'Missing account_id'},
+            status_code=400
+        )
+    
+    if not emails and not whatsapp_number:
+        return JSONResponse(
+            content={'success': False, 'message': 'No recipients specified'},
             status_code=400
         )
     
@@ -1320,49 +1352,74 @@ async def send_notification(data: dict):
     if zone_details:
         full_message += f"\n\n--- Current Zone Status ---\n" + "\n".join(zone_details)
     
+    # Track results
+    email_sent = 0
+    whatsapp_sent = False
+    
     try:
-        # If SMTP credentials are configured, send real email
-        if smtp_username and smtp_password:
-            msg = MIMEMultipart()
-            msg['From'] = email_from
-            msg['To'] = ', '.join(emails)
-            msg['Subject'] = subject
-            
-            msg.attach(MIMEText(full_message, 'plain'))
-            
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_username, smtp_password)
-                server.send_message(msg)
-            
-            return JSONResponse(content={
-                'success': True,
-                'message': f'Email sent to {", ".join(emails)}'
-            })
-        else:
-            # Fallback: save to file if SMTP not configured
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
-            
-            with open(filename, 'w') as f:
-                f.write(f"=== NOTIFICATION EMAIL ===\n\n")
-                f.write(f"TO: {', '.join(emails)}\n")
-                f.write(f"FROM: {email_from}\n")
-                f.write(f"SUBJECT: {subject}\n")
-                f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"\n--- MESSAGE ---\n\n")
-                f.write(full_message)
-            
-            return JSONResponse(content={
-                'success': True,
-                'message': f'Email saved to {filename} (SMTP not configured)'
-            })
+        # Send email if requested
+        if emails:
+            # If SMTP credentials are configured, send real email
+            if smtp_username and smtp_password:
+                msg = MIMEMultipart()
+                msg['From'] = email_from
+                msg['To'] = ', '.join(emails)
+                msg['Subject'] = subject
+                
+                msg.attach(MIMEText(full_message, 'plain'))
+                
+                with smtplib.SMTP(smtp_host, smtp_port) as server:
+                    server.starttls()
+                    server.login(smtp_username, smtp_password)
+                    server.send_message(msg)
+                
+                email_sent = len(emails)
+                logger.info(f"Email sent to {len(emails)} recipients")
+            else:
+                # Fallback: save to file if SMTP not configured
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
+                
+                with open(filename, 'w') as f:
+                    f.write(f"=== NOTIFICATION EMAIL ===\n\n")
+                    f.write(f"TO: {', '.join(emails)}\n")
+                    f.write(f"FROM: {email_from}\n")
+                    f.write(f"SUBJECT: {subject}\n")
+                    f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"\n--- MESSAGE ---\n\n")
+                    f.write(full_message)
+                
+                email_sent = len(emails)
+                logger.info(f"Email saved to {filename} (SMTP not configured)")
+        
+        # Send WhatsApp if requested
+        if whatsapp_number:
+            whatsapp_service = get_whatsapp_service()
+            if whatsapp_service and whatsapp_service.enabled:
+                # Format message for WhatsApp
+                whatsapp_msg = f"🚨 Zone Alert - {account_info['name']}\n\n{message}"
+                
+                # Send WhatsApp message
+                result = await whatsapp_service.send_message(whatsapp_number, whatsapp_msg)
+                if result['success']:
+                    whatsapp_sent = True
+                    logger.info(f"WhatsApp sent to {whatsapp_number}")
+                else:
+                    logger.error(f"WhatsApp failed: {result.get('error')}")
+            else:
+                logger.info("WhatsApp service not enabled")
+        
+        return JSONResponse(content={
+            'success': True,
+            'email_sent': email_sent,
+            'whatsapp_sent': whatsapp_sent
+        })
             
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error(f"Failed to send notification: {e}")
         return JSONResponse(content={
             'success': False,
-            'message': f'Failed to send email: {str(e)}'
+            'message': f'Failed to send notification: {str(e)}'
         }, status_code=500)
 
 
