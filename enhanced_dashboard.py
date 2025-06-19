@@ -963,6 +963,16 @@ async def dashboard():
                     " placeholder="Your notification message will appear here..."></textarea>
                 </div>
                 
+                <div class="whatsapp-section" style="margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">
+                        <span style="font-size: 1.2rem;">📱</span> WhatsApp Notification (Optional)
+                    </h4>
+                    <input type="tel" id="whatsappNumber" placeholder="+60123456789" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.875rem; background: white;">
+                    <div style="font-size: 0.75rem; color: #666666; margin-top: 0.5rem;">
+                        Enter WhatsApp number with country code (e.g., +60 for Malaysia)
+                    </div>
+                </div>
+                
                 <div class="modal-actions">
                     <button class="btn-secondary" onclick="closeModal()">Cancel</button>
                     <button class="btn-primary" onclick="sendNotification('${accountId}')">
