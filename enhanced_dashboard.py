@@ -993,8 +993,8 @@ async def dashboard():
             
             switch(template) {
                 case 'offline':
+                    message = `Dear ${account.name} team,\n\n`;
                     if (offlineZones.length > 0) {
-                        message = `Dear ${account.name} team,\n\n`;
                         message += `We've detected that ${offlineZones.length} of your music zones are currently offline:\n\n`;
                         offlineZones.forEach(z => {
                             message += `• ${z.name}`;
@@ -1004,15 +1004,18 @@ async def dashboard():
                             }
                             message += `\n`;
                         });
-                        message += `\nThis interruption may affect your customers' experience. Here's what you can do:\n\n`;
-                        message += `1. Check that the device is powered on\n`;
-                        message += `2. Verify your internet connection is working\n`;
-                        message += `3. Restart the Soundtrack player device\n`;
-                        message += `4. Ensure no firewall is blocking the connection\n\n`;
-                        message += `If the issue persists after trying these steps, please contact our support team at support@bmasiamusic.com or call us directly.\n\n`;
-                        message += `We're here to help ensure your music plays smoothly.\n\n`;
-                        message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    } else {
+                        message += `We've detected that some of your music zones are currently offline:\n\n`;
+                        message += `• [Zone names will be listed here]\n`;
                     }
+                    message += `\nThis interruption may affect your customers' experience. Here's what you can do:\n\n`;
+                    message += `1. Check that the device is powered on\n`;
+                    message += `2. Verify your internet connection is working\n`;
+                    message += `3. Restart the Soundtrack player device\n`;
+                    message += `4. Ensure no firewall is blocking the connection\n\n`;
+                    message += `If the issue persists after trying these steps, please contact our support team at support@bmasiamusic.com or call us directly.\n\n`;
+                    message += `We're here to help ensure your music plays smoothly.\n\n`;
+                    message += `Best regards,\nBMAsia Support Team`;
                     break;
                     
                 case 'expired':
@@ -1036,7 +1039,7 @@ async def dashboard():
                     message += `• Call our support team\n`;
                     message += `• Visit your account dashboard\n\n`;
                     message += `Thank you for choosing Soundtrack Your Brand. We look forward to continuing to serve your music needs.\n\n`;
-                    message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    message += `Best regards,\nBMAsia Support Team`;
                     break;
                     
                 case 'unpaired':
@@ -1063,7 +1066,7 @@ async def dashboard():
                     message += `• Soundtrack hardware player (contact us for options)\n\n`;
                     message += `Need help with setup? Our support team can walk you through the process step-by-step. We're just an email or phone call away.\n\n`;
                     message += `Let's get your music playing and enhance your customer experience today!\n\n`;
-                    message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    message += `Best regards,\nBMAsia Support Team`;
                     break;
                     
                 case 'no_subscription':
@@ -1087,7 +1090,7 @@ async def dashboard():
                     message += `Contact us today to learn about our current promotions and find the perfect plan for your business needs.\n\n`;
                     message += `Ready to transform your space with the power of music? Our team is standing by to help you get started. Simply reply to this email or give us a call.\n\n`;
                     message += `We're excited to help you create the perfect soundtrack for your business!\n\n`;
-                    message += `Best regards,\nSoundtrack Your Brand Support Team`;
+                    message += `Best regards,\nBMAsia Support Team`;
                     break;
                     
                 case 'custom':
