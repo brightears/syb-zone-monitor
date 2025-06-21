@@ -13,7 +13,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import httpx
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from zone_monitor_optimized import ZoneMonitor
 try:
     from whatsapp_service import get_whatsapp_service
@@ -34,6 +35,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Serve static files
+@app.get("/static/bmasia-logo.png")
+async def get_logo():
+    """Serve the BMAsia logo."""
+    logo_path = Path("bmasia-logo.png")
+    if logo_path.exists():
+        return FileResponse(logo_path, media_type="image/png")
+    else:
+        raise HTTPException(status_code=404, detail="Logo not found")
 
 # Global variables
 zone_monitor: Optional[ZoneMonitor] = None
@@ -645,21 +656,7 @@ async def dashboard():
 <body>
     <div class="header">
         <h1>
-            <svg width="32" height="32" viewBox="0 0 100 100" style="vertical-align: middle; margin-right: 8px;">
-                <!-- BMAsia logo representation -->
-                <defs>
-                    <linearGradient id="bmasiaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#FFA500;stop-opacity:1" />
-                        <stop offset="50%" style="stop-color:#FF6B35;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#E63946;stop-opacity:1" />
-                    </linearGradient>
-                </defs>
-                <!-- Wave/Signal rings -->
-                <path d="M 30 50 Q 40 30, 50 50 T 70 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="8" opacity="0.3"/>
-                <path d="M 25 50 Q 37.5 25, 50 50 T 75 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="6" opacity="0.5"/>
-                <path d="M 20 50 Q 35 20, 50 50 T 80 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="4" opacity="0.7"/>
-                <path d="M 15 50 Q 32.5 15, 50 50 T 85 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="3" opacity="0.9"/>
-            </svg>
+            <img src="/static/bmasia-logo.png" alt="BMAsia" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 8px;">
             SYB Zone Monitor - Enhanced Dashboard
         </h1>
     </div>
