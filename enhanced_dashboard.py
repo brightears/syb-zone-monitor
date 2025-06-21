@@ -165,7 +165,7 @@ async def startup_event():
             syb_api_key=api_key,
             syb_api_url="https://api.soundtrackyourbrand.com/v2",
             zone_ids=zone_ids,
-            polling_interval=int(os.getenv("POLLING_INTERVAL", "60")),
+            polling_interval=int(os.getenv("POLLING_INTERVAL", "60").split('#')[0].strip()),
             offline_threshold=600,
             request_timeout=30,
             max_retries=5,
