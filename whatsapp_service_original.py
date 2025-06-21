@@ -1,4 +1,4 @@
-"""WhatsApp Business Cloud API Service using Templates."""
+"""WhatsApp Business Cloud API Service for sending notifications."""
 
 import os
 import httpx
@@ -41,8 +41,12 @@ class WhatsAppService:
         """
         Send a WhatsApp message to a phone number.
         
-        For test numbers, we'll use the hello_world template.
-        For production, you'd create a custom template.
+        Args:
+            to_number: Phone number with country code (e.g., +60123456789)
+            message: Text message to send
+            
+        Returns:
+            Dict with success status and details
         """
         if not self.enabled:
             return {
@@ -50,8 +54,10 @@ class WhatsAppService:
                 'error': 'WhatsApp service is not enabled'
             }
         
-        # Clean phone number
-        to_number = to_number.strip().replace(' ', '').replace('+', '')
+        # Clean phone number (remove spaces, ensure + prefix)
+        to_number = to_number.strip().replace(' ', '')
+        if not to_number.startswith('+'):
+            to_number = '+' + to_number
         
         # Prepare request
         headers = {
@@ -59,22 +65,14 @@ class WhatsAppService:
             'Content-Type': 'application/json'
         }
         
-        # For test number, use hello_world template
-        # In production, you'd create a custom template for zone alerts
         data = {
             'messaging_product': 'whatsapp',
             'to': to_number,
-            'type': 'template',
-            'template': {
-                'name': 'hello_world',
-                'language': {
-                    'code': 'en_US'
-                }
+            'type': 'text',
+            'text': {
+                'body': message
             }
         }
-        
-        # Log that we're using template due to test number limitations
-        logger.info(f"Using hello_world template for test number. Zone alert: {message[:50]}...")
         
         try:
             async with httpx.AsyncClient() as client:
@@ -88,13 +86,11 @@ class WhatsAppService:
                 response_data = response.json()
                 
                 if response.status_code == 200:
-                    logger.info(f"WhatsApp template sent successfully to {to_number}")
-                    logger.info(f"Note: Actual message content: {message}")
+                    logger.info(f"WhatsApp message sent successfully to {to_number}")
                     return {
                         'success': True,
                         'message_id': response_data.get('messages', [{}])[0].get('id'),
-                        'to': to_number,
-                        'note': 'Using test template - actual zone alert logged above'
+                        'to': to_number
                     }
                 else:
                     error_msg = response_data.get('error', {}).get('message', 'Unknown error')
@@ -122,15 +118,20 @@ class WhatsAppService:
         """
         Format a zone alert message for WhatsApp.
         
-        Note: This message will be logged but not sent with test number.
+        Args:
+            account_name: Name of the account
+            zones_info: Dictionary with zone status information
+            
+        Returns:
+            Formatted message string
         """
         offline_zones = zones_info.get('offline_zones', [])
         
-        message = f"🚨 Zone Alert - {account_name}\n\n"
+        message = f"🚨 *Zone Alert - {account_name}*\n\n"
         
         if offline_zones:
-            message += f"⚠️ {len(offline_zones)} zones offline:\n"
-            for zone in offline_zones[:5]:
+            message += f"⚠️ *{len(offline_zones)} zones offline:*\n"
+            for zone in offline_zones[:5]:  # Limit to first 5 for brevity
                 message += f"• {zone['name']}\n"
             if len(offline_zones) > 5:
                 message += f"• ... and {len(offline_zones) - 5} more\n"
