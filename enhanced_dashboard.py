@@ -644,7 +644,24 @@ async def dashboard():
 </head>
 <body>
     <div class="header">
-        <h1>🎵 SYB Zone Monitor - Enhanced Dashboard</h1>
+        <h1>
+            <svg width="32" height="32" viewBox="0 0 100 100" style="vertical-align: middle; margin-right: 8px;">
+                <!-- BMAsia logo representation -->
+                <defs>
+                    <linearGradient id="bmasiaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#FFA500;stop-opacity:1" />
+                        <stop offset="50%" style="stop-color:#FF6B35;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#E63946;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+                <!-- Wave/Signal rings -->
+                <path d="M 30 50 Q 40 30, 50 50 T 70 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="8" opacity="0.3"/>
+                <path d="M 25 50 Q 37.5 25, 50 50 T 75 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="6" opacity="0.5"/>
+                <path d="M 20 50 Q 35 20, 50 50 T 80 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="4" opacity="0.7"/>
+                <path d="M 15 50 Q 32.5 15, 50 50 T 85 50" fill="none" stroke="url(#bmasiaGradient)" stroke-width="3" opacity="0.9"/>
+            </svg>
+            SYB Zone Monitor - Enhanced Dashboard
+        </h1>
     </div>
     
     <div class="stats-bar">
