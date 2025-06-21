@@ -529,7 +529,7 @@ async def dashboard():
         .modal-title {
             font-size: 1.25rem;
             font-weight: 600;
-            color: #f1f5f9;
+            color: #1a1a1a !important;
         }
         
         .close-btn {
