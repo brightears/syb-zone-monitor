@@ -1053,6 +1053,35 @@ async def dashboard():
                             Enter number for one-time send, or manage contacts above for regular use
                         </div>
                     </div>
+                    
+                    <div style="margin-top: 1.5rem;">
+                        <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">WhatsApp Message</h4>
+                        <select id="whatsappMessageTemplate" onchange="updateWhatsAppMessagePreview()" style="
+                            width: 100%;
+                            padding: 0.5rem;
+                            margin-bottom: 0.75rem;
+                            border: 1px solid #e5e5e5;
+                            border-radius: 6px;
+                            background: white;
+                            color: #1a1a1a;
+                        ">
+                            <option value="offline">Zones Offline Alert</option>
+                            <option value="expired">Subscription Expired</option>
+                            <option value="unpaired">No Paired Device</option>
+                            <option value="no_subscription">No Subscription</option>
+                            <option value="custom">Custom Message</option>
+                        </select>
+                        <textarea id="whatsappMessageContent" rows="4" style="
+                            width: 100%;
+                            padding: 0.75rem;
+                            border: 1px solid #e5e5e5;
+                            border-radius: 6px;
+                            resize: vertical;
+                            font-family: inherit;
+                            color: #1a1a1a;
+                            background: white;
+                        " placeholder="Your WhatsApp message will appear here..."></textarea>
+                    </div>
                 </div>
                 
                 <div class="modal-actions">
@@ -1078,7 +1107,10 @@ async def dashboard():
             }
             
             // Initialize with offline template
-            setTimeout(() => updateMessagePreview(), 100);
+            setTimeout(() => {
+                updateMessagePreview();
+                updateWhatsAppMessagePreview();
+            }, 100);
         }
         
         function updateMessagePreview() {
@@ -1195,6 +1227,90 @@ async def dashboard():
                     message += `Ready to transform your space with the power of music? Our team is standing by to help you get started. Simply reply to this email or give us a call.\n\n`;
                     message += `We're excited to help you create the perfect soundtrack for your business!\n\n`;
                     message += `Best regards,\nBMAsia Support Team`;
+                    break;
+                    
+                case 'custom':
+                    message = ''; // Let user write their own
+                    break;
+            }
+            
+            messageContent.value = message;
+        }
+        
+        function updateWhatsAppMessagePreview() {
+            const template = document.getElementById('whatsappMessageTemplate').value;
+            const messageContent = document.getElementById('whatsappMessageContent');
+            const account = window.currentAccount;
+            
+            if (!account) return;
+            
+            const offlineZones = account.zones.filter(z => z.status === 'offline');
+            const expiredZones = account.zones.filter(z => z.status === 'expired');
+            const unpairedZones = account.zones.filter(z => z.status === 'unpaired');
+            const noSubZones = account.zones.filter(z => z.status === 'no_subscription');
+            
+            let message = '';
+            
+            switch(template) {
+                case 'offline':
+                    message = `🚨 Zone Alert - ${account.name}\n\n`;
+                    if (offlineZones.length > 0) {
+                        message += `${offlineZones.length} zone${offlineZones.length > 1 ? 's' : ''} offline:\n`;
+                        offlineZones.forEach(z => {
+                            message += `• ${z.name}`;
+                            if (z.offline_duration) {
+                                const duration = formatDuration(z.offline_duration);
+                                message += ` (${duration})`;
+                            }
+                            message += `\n`;
+                        });
+                    } else {
+                        message += `Zones are offline. Please check:\n`;
+                    }
+                    message += `\nPlease check device power & internet connection.\n`;
+                    message += `Need help? Contact support@bmasiamusic.com`;
+                    break;
+                    
+                case 'expired':
+                    message = `⚠️ Subscription Alert - ${account.name}\n\n`;
+                    if (expiredZones.length > 0) {
+                        message += `${expiredZones.length} zone${expiredZones.length > 1 ? 's' : ''} expired:\n`;
+                        expiredZones.forEach(z => {
+                            message += `• ${z.name}\n`;
+                        });
+                    } else {
+                        message += `Your zones have expired subscriptions.\n`;
+                    }
+                    message += `\nMusic service suspended. Contact us to renew.\n`;
+                    message += `📞 Call or reply to this message`;
+                    break;
+                    
+                case 'unpaired':
+                    message = `📱 Setup Required - ${account.name}\n\n`;
+                    if (unpairedZones.length > 0) {
+                        message += `${unpairedZones.length} zone${unpairedZones.length > 1 ? 's need' : ' needs'} device pairing:\n`;
+                        unpairedZones.forEach(z => {
+                            message += `• ${z.name}\n`;
+                        });
+                    } else {
+                        message += `Zones need device pairing.\n`;
+                    }
+                    message += `\nDownload Soundtrack Player app & log in to pair.\n`;
+                    message += `Need help? We'll guide you through setup.`;
+                    break;
+                    
+                case 'no_subscription':
+                    message = `🎵 Activation Required - ${account.name}\n\n`;
+                    if (noSubZones.length > 0) {
+                        message += `${noSubZones.length} zone${noSubZones.length > 1 ? 's need' : ' needs'} subscription:\n`;
+                        noSubZones.forEach(z => {
+                            message += `• ${z.name}\n`;
+                        });
+                    } else {
+                        message += `Zones need subscription activation.\n`;
+                    }
+                    message += `\nReady to start playing music!\n`;
+                    message += `Contact us for subscription options.`;
                     break;
                     
                 case 'custom':
@@ -1365,15 +1481,21 @@ async def dashboard():
                 selectedWhatsAppNumbers.push(whatsappNumber);
             }
             
-            const message = document.getElementById('messageContent').value;
+            const emailMessage = document.getElementById('messageContent').value;
+            const whatsappMessage = document.getElementById('whatsappMessageContent').value;
             
             if (selectedEmails.length === 0 && selectedWhatsAppNumbers.length === 0) {
                 alert('Please select at least one contact or enter a WhatsApp number');
                 return;
             }
             
-            if (!message.trim()) {
-                alert('Please enter a notification message');
+            if (selectedEmails.length > 0 && !emailMessage.trim()) {
+                alert('Please enter an email notification message');
+                return;
+            }
+            
+            if (selectedWhatsAppNumbers.length > 0 && !whatsappMessage.trim()) {
+                alert('Please enter a WhatsApp notification message');
                 return;
             }
             
@@ -1387,7 +1509,8 @@ async def dashboard():
                         account_id: accountId,
                         emails: selectedEmails,
                         whatsapp_numbers: selectedWhatsAppNumbers,
-                        message: message
+                        email_message: emailMessage,
+                        whatsapp_message: whatsappMessage
                     })
                 });
                 
@@ -1619,7 +1742,8 @@ async def send_notification(data: dict):
     account_id = data.get('account_id')
     emails = data.get('emails', [])
     whatsapp_numbers = data.get('whatsapp_numbers', [])
-    message = data.get('message', '')
+    email_message = data.get('email_message', data.get('message', ''))  # Fallback for compatibility
+    whatsapp_message = data.get('whatsapp_message', data.get('message', ''))
     
     if not account_id:
         return JSONResponse(
@@ -1666,7 +1790,7 @@ async def send_notification(data: dict):
     subject = f"Zone Status Alert - {account_info['name']}"
     
     # Add zone details to message if any
-    full_message = message
+    full_message = email_message
     if zone_details:
         full_message += f"\n\n--- Current Zone Status ---\n" + "\n".join(zone_details)
     
@@ -1715,12 +1839,10 @@ async def send_notification(data: dict):
         if whatsapp_numbers:
             whatsapp_service = get_whatsapp_service()
             if whatsapp_service and whatsapp_service.enabled:
-                # Format message for WhatsApp
-                whatsapp_msg = f"🚨 Zone Alert - {account_info['name']}\n\n{message}"
-                
+                # Use the WhatsApp-specific message
                 # Send WhatsApp message to each number
                 for phone_number in whatsapp_numbers:
-                    result = await whatsapp_service.send_message(phone_number, whatsapp_msg)
+                    result = await whatsapp_service.send_message(phone_number, whatsapp_message)
                     if result['success']:
                         whatsapp_sent_count += 1
                         logger.info(f"WhatsApp sent to {phone_number}")
