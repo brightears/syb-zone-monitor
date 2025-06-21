@@ -32,6 +32,9 @@ log/
 !requirements.json
 !package.json
 !render.json
+!automation_settings.json
+!automation_sent.json
+!whatsapp_contacts.json
 
 # CSV files with account data
 *.csv

@@ -1,0 +1,10 @@
+{
+  "_example": {
+    "enabled": false,
+    "offline_threshold_hours": 24,
+    "notify_emails": [],
+    "notify_whatsapp": [],
+    "last_notification_sent": {},
+    "notification_cooldown_hours": 24
+  }
+}

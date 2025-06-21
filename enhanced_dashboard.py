@@ -51,6 +51,8 @@ zone_monitor: Optional[ZoneMonitor] = None
 discovered_data: Dict = {}
 contact_data: Dict = {}
 whatsapp_contacts: Dict = {}  # Store WhatsApp contacts by account_id
+automation_settings: Dict = {}  # Store automation settings by account_id
+automation_sent: Dict = {}  # Track sent notifications to avoid duplicates
 
 
 def load_discovered_data():
@@ -115,6 +117,56 @@ def save_whatsapp_contacts():
     logger.info(f"Saved WhatsApp contacts for {len(whatsapp_contacts)} accounts")
 
 
+def load_automation_settings():
+    """Load automation settings from automation_settings.json."""
+    global automation_settings
+    
+    automation_file = Path("automation_settings.json")
+    if automation_file.exists():
+        with open(automation_file, 'r') as f:
+            automation_settings = json.load(f)
+            # Remove the example entry if it exists
+            automation_settings.pop('_example', None)
+            logger.info(f"Loaded automation settings for {len(automation_settings)} accounts")
+    else:
+        logger.info("No automation settings file found - starting with empty data")
+        automation_settings = {}
+
+
+def save_automation_settings():
+    """Save automation settings to automation_settings.json."""
+    try:
+        with open("automation_settings.json", 'w') as f:
+            json.dump(automation_settings, f, indent=2)
+        logger.info("Automation settings saved")
+    except Exception as e:
+        logger.error(f"Failed to save automation settings: {e}")
+
+
+def load_automation_sent():
+    """Load sent notification tracking from automation_sent.json."""
+    global automation_sent
+    
+    sent_file = Path("automation_sent.json")
+    if sent_file.exists():
+        with open(sent_file, 'r') as f:
+            automation_sent = json.load(f)
+            logger.info(f"Loaded sent notification tracking")
+    else:
+        logger.info("No sent notification tracking file found - starting with empty data")
+        automation_sent = {}
+
+
+def save_automation_sent():
+    """Save sent notification tracking to automation_sent.json."""
+    try:
+        with open("automation_sent.json", 'w') as f:
+            json.dump(automation_sent, f, indent=2)
+        logger.info("Automation sent tracking saved")
+    except Exception as e:
+        logger.error(f"Failed to save automation sent tracking: {e}")
+
+
 def get_all_zone_ids() -> List[str]:
     """Extract all zone IDs from discovered data."""
     zone_ids = []
@@ -152,6 +204,8 @@ async def startup_event():
     load_discovered_data()
     load_contact_data()
     load_whatsapp_contacts()
+    load_automation_settings()
+    load_automation_sent()
     
     # Get all zone IDs
     zone_ids = get_all_zone_ids()
@@ -190,8 +244,8 @@ async def startup_event():
         
         logger.info(f"Initialized zone monitor with {len(zone_ids)} zones")
         
-        # Start background task to check zones periodically
-        asyncio.create_task(monitor_zones_background())
+        # Start background task to check zones periodically with automation
+        asyncio.create_task(monitor_zones_with_automation())
     else:
         logger.warning("No zones to monitor - running in display-only mode")
         zone_monitor = None
@@ -493,6 +547,33 @@ async def dashboard():
             transform: none;
         }
         
+        .automation-btn {
+            padding: 0.5rem 1rem;
+            background: #ffffff;
+            border: 1px solid #1a1a1a;
+            border-radius: 20px;
+            color: #1a1a1a;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        
+        .automation-btn:hover {
+            background: #f5f5f5;
+            transform: translateY(-1px);
+        }
+        
+        .automation-btn.automation-enabled {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+        
+        .automation-btn.automation-enabled:hover {
+            background: #059669;
+        }
+        
         .countdown {
             margin-left: auto;
             font-size: 0.875rem;
@@ -729,17 +810,32 @@ async def dashboard():
         </div>
     </div>
     
+    <!-- Automation Settings Modal -->
+    <div class="modal" id="automationModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Automation Settings</h2>
+                <button class="close-btn" onclick="closeAutomationModal()">&times;</button>
+            </div>
+            <div id="automationModalBody">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
     <script>
         let allData = {};
         let currentFilter = 'all';
         let searchTerm = '';
         let countdownValue = 30;
         let countdownInterval;
+        let automationSettings = {};
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             fetchZoneData();
             startCountdown();
+            loadAutomationSettings();
             
             // Setup event listeners
             document.getElementById('searchInput').addEventListener('input', handleSearch);
@@ -860,13 +956,23 @@ async def dashboard():
                                 ${unpairedCount > 0 ? `<span style="color: #f59e0b">${unpairedCount} unpaired</span>` : ''}
                             </div>
                         </div>
-                        <button class="notify-btn" onclick="showNotificationModal('${id}', '${escapeHtml(account.name)}')"
-                                ${account.hasContacts ? '' : 'disabled'}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle;">
-                                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                            </svg>
-                            <span>Notify</span>
-                        </button>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="notify-btn" onclick="showNotificationModal('${id}', '${escapeHtml(account.name)}')"
+                                    ${account.hasContacts ? '' : 'disabled'}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle;">
+                                    <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
+                                <span>Notify</span>
+                            </button>
+                            <button class="automation-btn ${account.automation?.enabled ? 'automation-enabled' : ''}" 
+                                    onclick="showAutomationModal('${id}', '${escapeHtml(account.name)}')"
+                                    title="${account.automation?.enabled ? 'Automation enabled' : 'Configure automation'}">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle;">
+                                    <path d="M12 2v6m0 4v6m0 4v2M8 8h8M4 12h16M8 16h8"></path>
+                                </svg>
+                                <span>Auto</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="zones-grid">
                         ${account.zones.map(zone => renderZone(zone)).join('')}
@@ -1553,15 +1659,206 @@ async def dashboard():
             return div.innerHTML;
         }
         
+        // Automation Settings Functions
+        async function loadAutomationSettings() {
+            try {
+                const response = await fetch('/api/automation/settings');
+                const data = await response.json();
+                automationSettings = data.settings || {};
+                
+                // Update UI to show automation status
+                Object.entries(allData.accounts || {}).forEach(([accountId, account]) => {
+                    const settings = automationSettings[accountId];
+                    if (settings && settings.enabled) {
+                        account.automation = settings;
+                    }
+                });
+                updateDisplay();
+            } catch (error) {
+                console.error('Error loading automation settings:', error);
+            }
+        }
+        
+        async function showAutomationModal(accountId, accountName) {
+            window.currentAccountId = accountId;
+            const settings = automationSettings[accountId] || {
+                enabled: false,
+                offline_threshold_hours: 24,
+                notify_emails: [],
+                notify_whatsapp: [],
+                notification_cooldown_hours: 24
+            };
+            
+            const account = allData.accounts[accountId];
+            const modal = document.getElementById('automationModal');
+            const modalBody = document.getElementById('automationModalBody');
+            
+            modalBody.innerHTML = `
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="color: #666666; margin-bottom: 1rem;">Account: ${escapeHtml(accountName)}</h3>
+                    
+                    <div style="background: #f0f9ff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid #0ea5e9;">
+                        <p style="color: #0369a1; font-size: 0.875rem; margin: 0;">
+                            When enabled, automatic notifications will be sent when zones go offline for longer than the specified threshold.
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                            <input type="checkbox" id="automationEnabled" ${settings.enabled ? 'checked' : ''} 
+                                   style="width: 18px; height: 18px; accent-color: #10b981;">
+                            <span style="font-weight: 600; color: #1a1a1a;">Enable Automatic Notifications</span>
+                        </label>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label style="display: block; font-size: 0.875rem; color: #666666; margin-bottom: 0.25rem;">
+                                    Offline Threshold (hours)
+                                </label>
+                                <input type="number" id="offlineThreshold" value="${settings.offline_threshold_hours}" 
+                                       min="1" max="168" style="width: 100%; padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.875rem; color: #666666; margin-bottom: 0.25rem;">
+                                    Cooldown Period (hours)
+                                </label>
+                                <input type="number" id="cooldownPeriod" value="${settings.notification_cooldown_hours}" 
+                                       min="1" max="168" style="width: 100%; padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 6px;">
+                            </div>
+                        </div>
+                        
+                        <div style="font-size: 0.75rem; color: #666666; margin-bottom: 1rem;">
+                            • Threshold: How long a zone must be offline before sending a notification<br>
+                            • Cooldown: Minimum time between notifications for the same zone
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Email Recipients</h4>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            ${account.contacts && account.contacts.length > 0 ? 
+                                account.contacts.map(contact => `
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 6px; margin-bottom: 0.5rem;">
+                                        <input type="checkbox" value="${contact.email}" 
+                                               ${settings.notify_emails.includes(contact.email) ? 'checked' : ''}
+                                               class="automation-email-checkbox">
+                                        <span>${escapeHtml(contact.email)}</span>
+                                    </label>
+                                `).join('') :
+                                '<p style="color: #666666; font-size: 0.875rem;">No email contacts available</p>'
+                            }
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">WhatsApp Recipients</h4>
+                        <div id="automationWhatsAppList">
+                            <!-- Will be populated by loadWhatsAppContacts -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn-secondary" onclick="closeAutomationModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveAutomationSettings()">Save Settings</button>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+            
+            // Load WhatsApp contacts for automation
+            loadWhatsAppContactsForAutomation(accountId, settings.notify_whatsapp);
+        }
+        
+        async function loadWhatsAppContactsForAutomation(accountId, selectedNumbers) {
+            const whatsappContacts = await loadWhatsAppContacts(accountId);
+            const container = document.getElementById('automationWhatsAppList');
+            
+            if (whatsappContacts.length > 0) {
+                container.innerHTML = whatsappContacts.map(contact => `
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 6px; margin-bottom: 0.5rem;">
+                        <input type="checkbox" value="${contact.phone}" 
+                               ${selectedNumbers.includes(contact.phone) ? 'checked' : ''}
+                               class="automation-whatsapp-checkbox">
+                        <span>${escapeHtml(contact.phone)} - ${escapeHtml(contact.name)}</span>
+                    </label>
+                `).join('');
+            } else {
+                container.innerHTML = '<p style="color: #666666; font-size: 0.875rem;">No WhatsApp contacts available</p>';
+            }
+        }
+        
+        function closeAutomationModal() {
+            document.getElementById('automationModal').style.display = 'none';
+        }
+        
+        async function saveAutomationSettings() {
+            const accountId = window.currentAccountId;
+            const enabled = document.getElementById('automationEnabled').checked;
+            const offlineThreshold = parseInt(document.getElementById('offlineThreshold').value);
+            const cooldownPeriod = parseInt(document.getElementById('cooldownPeriod').value);
+            
+            const notifyEmails = [];
+            document.querySelectorAll('.automation-email-checkbox:checked').forEach(checkbox => {
+                notifyEmails.push(checkbox.value);
+            });
+            
+            const notifyWhatsapp = [];
+            document.querySelectorAll('.automation-whatsapp-checkbox:checked').forEach(checkbox => {
+                notifyWhatsapp.push(checkbox.value);
+            });
+            
+            const settings = {
+                enabled: enabled,
+                offline_threshold_hours: offlineThreshold,
+                notify_emails: notifyEmails,
+                notify_whatsapp: notifyWhatsapp,
+                notification_cooldown_hours: cooldownPeriod
+            };
+            
+            try {
+                const response = await fetch(`/api/automation/settings/${accountId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Update local settings
+                    automationSettings[accountId] = settings;
+                    
+                    // Update account data
+                    if (allData.accounts[accountId]) {
+                        allData.accounts[accountId].automation = settings;
+                    }
+                    
+                    // Refresh display
+                    updateDisplay();
+                    closeAutomationModal();
+                    alert('Automation settings saved successfully!');
+                } else {
+                    alert('Failed to save settings: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error saving settings: ' + error.message);
+            }
+        }
+        
         // Handle modal close on outside click
         window.onclick = function(event) {
             const notificationModal = document.getElementById('notificationModal');
             const whatsappModal = document.getElementById('whatsappModal');
+            const automationModal = document.getElementById('automationModal');
             
             if (event.target === notificationModal) {
                 closeModal();
             } else if (event.target === whatsappModal) {
                 closeWhatsAppModal();
+            } else if (event.target === automationModal) {
+                closeAutomationModal();
             }
         }
     </script>
@@ -1654,7 +1951,8 @@ async def get_zones():
             'zones': account_zones,
             'hasIssues': has_issues,
             'contacts': contacts,
-            'hasContacts': len(contacts) > 0
+            'hasContacts': len(contacts) > 0,
+            'automation': automation_settings.get(account_id)
         }
     
     return JSONResponse(content={'accounts': accounts_data})
@@ -1879,6 +2177,204 @@ async def send_notification(data: dict):
             'success': False,
             'message': f'Failed to send notification: {str(e)}'
         }, status_code=500)
+
+
+@app.get("/api/automation/settings")
+async def get_automation_settings():
+    """Get all automation settings."""
+    # Include automation status in the response
+    return JSONResponse(content={'settings': automation_settings})
+
+
+@app.post("/api/automation/settings/{account_id}")
+async def save_automation_setting(account_id: str, settings: dict):
+    """Save automation settings for an account."""
+    try:
+        # Validate settings
+        required_fields = ['enabled', 'offline_threshold_hours', 'notify_emails', 'notify_whatsapp', 'notification_cooldown_hours']
+        for field in required_fields:
+            if field not in settings:
+                return JSONResponse(
+                    content={'success': False, 'message': f'Missing required field: {field}'},
+                    status_code=400
+                )
+        
+        # Save settings
+        automation_settings[account_id] = settings
+        save_automation_settings()
+        
+        # If disabling automation, clear any sent tracking for this account
+        if not settings.get('enabled'):
+            if account_id in automation_sent:
+                del automation_sent[account_id]
+                save_automation_sent()
+        
+        return JSONResponse(content={'success': True})
+    except Exception as e:
+        logger.error(f"Failed to save automation settings: {e}")
+        return JSONResponse(
+            content={'success': False, 'message': str(e)},
+            status_code=500
+        )
+
+
+async def check_automation_triggers():
+    """Check for zones that meet automation trigger criteria and send notifications."""
+    if not zone_monitor:
+        return
+    
+    current_time = datetime.now()
+    zones_status = zone_monitor.get_detailed_status()
+    
+    for account_id, settings in automation_settings.items():
+        if not settings.get('enabled'):
+            continue
+            
+        account_info = discovered_data.get(account_id)
+        if not account_info:
+            continue
+        
+        # Check each zone in the account
+        offline_zones = []
+        for location in account_info.get('locations', []):
+            for zone in location.get('zones', []):
+                zone_id = zone.get('id')
+                if not zone_id:
+                    continue
+                
+                zone_status = zones_status.get(zone_id, {})
+                if zone_status.get('status') == 'offline':
+                    offline_duration = zone_status.get('offline_duration', 0)
+                    threshold_seconds = settings['offline_threshold_hours'] * 3600
+                    
+                    if offline_duration >= threshold_seconds:
+                        # Check if we've already sent a notification recently
+                        if account_id not in automation_sent:
+                            automation_sent[account_id] = {}
+                        
+                        last_sent = automation_sent[account_id].get(zone_id)
+                        cooldown_seconds = settings['notification_cooldown_hours'] * 3600
+                        
+                        if last_sent:
+                            last_sent_time = datetime.fromisoformat(last_sent)
+                            time_since_last = (current_time - last_sent_time).total_seconds()
+                            if time_since_last < cooldown_seconds:
+                                continue
+                        
+                        # Add to offline zones list
+                        offline_zones.append({
+                            'name': zone.get('name', 'Unknown'),
+                            'offline_duration': offline_duration
+                        })
+        
+        # Send notification if there are offline zones
+        if offline_zones:
+            await send_automation_notification(account_id, account_info, offline_zones, settings)
+            
+            # Update sent tracking
+            for zone in offline_zones:
+                zone_id = None
+                # Find zone ID by name (not ideal but necessary)
+                for location in account_info.get('locations', []):
+                    for z in location.get('zones', []):
+                        if z.get('name') == zone['name']:
+                            zone_id = z.get('id')
+                            break
+                    if zone_id:
+                        break
+                
+                if zone_id:
+                    if account_id not in automation_sent:
+                        automation_sent[account_id] = {}
+                    automation_sent[account_id][zone_id] = current_time.isoformat()
+            
+            save_automation_sent()
+
+
+async def send_automation_notification(account_id: str, account_info: dict, offline_zones: list, settings: dict):
+    """Send automated notification for offline zones."""
+    try:
+        # Format duration helper
+        def format_duration(seconds):
+            hours = seconds // 3600
+            if hours < 24:
+                return f"{hours} hour{'s' if hours != 1 else ''}"
+            days = hours // 24
+            return f"{days} day{'s' if days != 1 else ''}"
+        
+        # Create email message
+        email_message = f"Dear {account_info['name']} team,\n\n"
+        email_message += f"This is an automated notification. We've detected that {len(offline_zones)} of your music zones have been offline for an extended period:\n\n"
+        
+        for zone in offline_zones:
+            duration = format_duration(zone['offline_duration'])
+            email_message += f"• {zone['name']} (offline for {duration})\n"
+        
+        email_message += "\nThis interruption may affect your customers' experience. Please check:\n"
+        email_message += "1. Device power and internet connection\n"
+        email_message += "2. Restart the Soundtrack player if needed\n\n"
+        email_message += "If you need assistance, please contact support@bmasiamusic.com\n\n"
+        email_message += "Best regards,\nBMAsia Support Team\n\n"
+        email_message += "---\nThis is an automated message sent because zones have been offline for more than "
+        email_message += f"{settings['offline_threshold_hours']} hours."
+        
+        # Create WhatsApp message
+        whatsapp_message = f"🚨 Automated Alert - {account_info['name']}\n\n"
+        whatsapp_message += f"{len(offline_zones)} zone{'s' if len(offline_zones) > 1 else ''} offline:\n"
+        
+        for zone in offline_zones:
+            duration = format_duration(zone['offline_duration'])
+            whatsapp_message += f"• {zone['name']} ({duration})\n"
+        
+        whatsapp_message += "\nPlease check device power & internet.\n"
+        whatsapp_message += "Need help? Contact support@bmasiamusic.com"
+        
+        # Send notifications using the existing notification endpoint logic
+        notification_data = {
+            'account_id': account_id,
+            'emails': settings.get('notify_emails', []),
+            'whatsapp_numbers': settings.get('notify_whatsapp', []),
+            'email_message': email_message,
+            'whatsapp_message': whatsapp_message
+        }
+        
+        # Call the existing notification endpoint directly
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://127.0.0.1:8080/api/notify",
+                json=notification_data
+            )
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Automation notification sent: {result}")
+            else:
+                logger.error(f"Failed to send automation notification: {response.text}")
+        
+        logger.info(f"Sent automation notification for account {account_id} with {len(offline_zones)} offline zones")
+        
+    except Exception as e:
+        logger.error(f"Failed to send automation notification: {e}")
+
+
+# Add automation checking to the background monitoring
+async def monitor_zones_with_automation():
+    """Enhanced background task that includes automation checking."""
+    global zone_monitor
+    
+    while True:
+        try:
+            if zone_monitor:
+                await zone_monitor.check_zones()
+                logger.debug("Zone check completed")
+                
+                # Check automation triggers
+                await check_automation_triggers()
+                logger.debug("Automation check completed")
+        except Exception as e:
+            logger.error(f"Error in background monitoring: {e}")
+        
+        # Wait for the polling interval
+        await asyncio.sleep(60)  # Check every 60 seconds
 
 
 if __name__ == "__main__":
