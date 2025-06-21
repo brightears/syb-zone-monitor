@@ -39,6 +39,7 @@ app = FastAPI()
 zone_monitor: Optional[ZoneMonitor] = None
 discovered_data: Dict = {}
 contact_data: Dict = {}
+whatsapp_contacts: Dict = {}  # Store WhatsApp contacts by account_id
 
 
 def load_discovered_data():
@@ -81,6 +82,28 @@ def load_contact_data():
         contact_data = {}
 
 
+def load_whatsapp_contacts():
+    """Load WhatsApp contacts from whatsapp_contacts.json."""
+    global whatsapp_contacts
+    
+    whatsapp_file = Path("whatsapp_contacts.json")
+    if whatsapp_file.exists():
+        with open(whatsapp_file, 'r') as f:
+            whatsapp_contacts = json.load(f)
+            logger.info(f"Loaded WhatsApp contacts for {len(whatsapp_contacts)} accounts")
+    else:
+        logger.info("No WhatsApp contacts file found - starting with empty data")
+        whatsapp_contacts = {}
+
+
+def save_whatsapp_contacts():
+    """Save WhatsApp contacts to whatsapp_contacts.json."""
+    whatsapp_file = Path("whatsapp_contacts.json")
+    with open(whatsapp_file, 'w') as f:
+        json.dump(whatsapp_contacts, f, indent=2)
+    logger.info(f"Saved WhatsApp contacts for {len(whatsapp_contacts)} accounts")
+
+
 def get_all_zone_ids() -> List[str]:
     """Extract all zone IDs from discovered data."""
     zone_ids = []
@@ -117,6 +140,7 @@ async def startup_event():
     # Load discovered data
     load_discovered_data()
     load_contact_data()
+    load_whatsapp_contacts()
     
     # Get all zone IDs
     zone_ids = get_all_zone_ids()
@@ -678,6 +702,19 @@ async def dashboard():
         </div>
     </div>
     
+    <!-- WhatsApp Management Modal -->
+    <div class="modal" id="whatsappModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Manage WhatsApp Contacts</h2>
+                <button class="close-btn" onclick="closeWhatsAppModal()">&times;</button>
+            </div>
+            <div id="whatsappModalBody">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
     <script>
         let allData = {};
         let currentFilter = 'all';
@@ -897,7 +934,31 @@ async def dashboard():
             }
         }
         
-        function showNotificationModal(accountId, accountName) {
+        async function loadWhatsAppContacts(accountId) {
+            try {
+                const response = await fetch(`/api/whatsapp/${accountId}`);
+                const data = await response.json();
+                return data.contacts || [];
+            } catch (error) {
+                console.error('Error loading WhatsApp contacts:', error);
+                return [];
+            }
+        }
+        
+        function renderWhatsAppContact(contact, checked = false) {
+            return `
+                <div class="contact-item">
+                    <input type="checkbox" id="whatsapp_${contact.id}" 
+                           value="${contact.phone}" ${checked ? 'checked' : ''}>
+                    <div class="contact-info">
+                        <div class="contact-email">${escapeHtml(contact.phone)}</div>
+                        <div class="contact-name">${escapeHtml(contact.name)}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function showNotificationModal(accountId, accountName) {
             const account = allData.accounts[accountId];
             if (!account || !account.contacts || account.contacts.length === 0) {
                 alert('No contacts available for this account');
@@ -905,6 +966,9 @@ async def dashboard():
             }
             window.currentAccountId = accountId;
             window.currentAccount = account;
+            
+            // Load WhatsApp contacts
+            const whatsappContacts = await loadWhatsAppContacts(accountId);
             
             const modal = document.getElementById('notificationModal');
             const modalBody = document.getElementById('modalBody');
@@ -970,12 +1034,22 @@ async def dashboard():
                 </div>
                 
                 <div class="whatsapp-section" style="margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
-                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">
-                        <span style="font-size: 1.2rem;">📱</span> WhatsApp Notification (Optional)
-                    </h4>
-                    <input type="tel" id="whatsappNumber" placeholder="+60123456789" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.875rem; background: white;">
-                    <div style="font-size: 0.75rem; color: #666666; margin-top: 0.5rem;">
-                        Enter WhatsApp number with country code (e.g., +60 for Malaysia)
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h4 style="color: #1a1a1a; margin: 0;">
+                            <span style="font-size: 1.2rem;">📱</span> WhatsApp Contacts
+                        </h4>
+                        <button class="btn-secondary" onclick="showWhatsAppManagementModal('${accountId}')" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">
+                            Manage Contacts
+                        </button>
+                    </div>
+                    <div id="whatsappContactsList">
+                        <!-- WhatsApp contacts will be loaded here -->
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <input type="tel" id="whatsappNumber" placeholder="+60123456789 (Quick send)" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.875rem; background: white;">
+                        <div style="font-size: 0.75rem; color: #666666; margin-top: 0.5rem;">
+                            Enter number for one-time send, or manage contacts above for regular use
+                        </div>
                     </div>
                 </div>
                 
@@ -988,6 +1062,18 @@ async def dashboard():
             `;
             
             modal.style.display = 'flex';
+            
+            // Populate WhatsApp contacts
+            const whatsappList = document.getElementById('whatsappContactsList');
+            if (whatsappContacts.length > 0) {
+                whatsappList.innerHTML = `
+                    <div class="contact-list">
+                        ${whatsappContacts.map(contact => renderWhatsAppContact(contact, true)).join('')}
+                    </div>
+                `;
+            } else {
+                whatsappList.innerHTML = '<div style="color: #666666; font-size: 0.875rem; text-align: center; padding: 1rem;">No WhatsApp contacts saved. Use "Manage Contacts" to add some.</div>';
+            }
             
             // Initialize with offline template
             setTimeout(() => updateMessagePreview(), 100);
@@ -1134,16 +1220,152 @@ async def dashboard():
             document.getElementById('notificationModal').style.display = 'none';
         }
         
+        function closeWhatsAppModal() {
+            document.getElementById('whatsappModal').style.display = 'none';
+        }
+        
+        async function showWhatsAppManagementModal(accountId) {
+            window.currentAccountId = accountId;
+            const account = allData.accounts[accountId];
+            
+            const modal = document.getElementById('whatsappModal');
+            const modalBody = document.getElementById('whatsappModalBody');
+            
+            // Load current WhatsApp contacts
+            const whatsappContacts = await loadWhatsAppContacts(accountId);
+            
+            modalBody.innerHTML = `
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="color: #666666; margin-bottom: 1rem;">Account: ${escapeHtml(account.name)}</h3>
+                    
+                    <div style="background: #f5f5f5; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Add New Contact</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <input type="text" id="newContactName" placeholder="Contact Name" style="padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 6px; background: white;">
+                            <input type="tel" id="newContactPhone" placeholder="+60123456789" style="padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 6px; background: white;">
+                        </div>
+                        <button class="btn-primary" onclick="addWhatsAppContact()" style="width: 100%;">
+                            Add Contact
+                        </button>
+                    </div>
+                    
+                    <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Existing Contacts</h4>
+                    <div id="whatsappContactsManagement">
+                        ${whatsappContacts.length > 0 ? 
+                            whatsappContacts.map(contact => renderWhatsAppContactForManagement(contact)).join('') :
+                            '<div style="text-align: center; color: #666666; padding: 2rem;">No WhatsApp contacts saved yet</div>'
+                        }
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn-secondary" onclick="closeWhatsAppModal()">Close</button>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+        }
+        
+        function renderWhatsAppContactForManagement(contact) {
+            return `
+                <div class="contact-item" style="justify-content: space-between;">
+                    <div class="contact-info">
+                        <div class="contact-email">${escapeHtml(contact.phone)}</div>
+                        <div class="contact-name">${escapeHtml(contact.name)}</div>
+                    </div>
+                    <button class="btn-secondary" onclick="deleteWhatsAppContact('${contact.id}')" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; color: #dc2626; border-color: #dc2626;">
+                        Delete
+                    </button>
+                </div>
+            `;
+        }
+        
+        async function addWhatsAppContact() {
+            const name = document.getElementById('newContactName').value.trim();
+            const phone = document.getElementById('newContactPhone').value.trim();
+            
+            if (!name || !phone) {
+                alert('Please enter both name and phone number');
+                return;
+            }
+            
+            // Basic phone validation
+            if (!phone.startsWith('+')) {
+                alert('Phone number must include country code (e.g., +60123456789)');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/whatsapp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        account_id: window.currentAccountId,
+                        contact: {
+                            name: name,
+                            phone: phone
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Refresh the modal
+                    showWhatsAppManagementModal(window.currentAccountId);
+                } else {
+                    alert('Failed to add contact: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error adding contact: ' + error.message);
+            }
+        }
+        
+        async function deleteWhatsAppContact(contactId) {
+            if (!confirm('Are you sure you want to delete this contact?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/whatsapp/${contactId}?account_id=${window.currentAccountId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Refresh the modal
+                    showWhatsAppManagementModal(window.currentAccountId);
+                } else {
+                    alert('Failed to delete contact: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error deleting contact: ' + error.message);
+            }
+        }
+        
         async function sendNotification(accountId) {
             const selectedEmails = [];
+            const selectedWhatsAppNumbers = [];
+            
+            // Get selected email contacts
             document.querySelectorAll('#modalBody input[type="checkbox"]:checked').forEach(checkbox => {
-                selectedEmails.push(checkbox.value);
+                if (checkbox.id.startsWith('contact_')) {
+                    selectedEmails.push(checkbox.value);
+                } else if (checkbox.id.startsWith('whatsapp_')) {
+                    selectedWhatsAppNumbers.push(checkbox.value);
+                }
             });
             
+            // Add manual WhatsApp number if provided
             const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
+            if (whatsappNumber) {
+                selectedWhatsAppNumbers.push(whatsappNumber);
+            }
+            
             const message = document.getElementById('messageContent').value;
             
-            if (selectedEmails.length === 0 && !whatsappNumber) {
+            if (selectedEmails.length === 0 && selectedWhatsAppNumbers.length === 0) {
                 alert('Please select at least one contact or enter a WhatsApp number');
                 return;
             }
@@ -1162,7 +1384,7 @@ async def dashboard():
                     body: JSON.stringify({
                         account_id: accountId,
                         emails: selectedEmails,
-                        whatsapp_number: whatsappNumber,
+                        whatsapp_numbers: selectedWhatsAppNumbers,
                         message: message
                     })
                 });
@@ -1174,7 +1396,7 @@ async def dashboard():
                         successMsg += '✅ Email sent to ' + result.email_sent + ' recipient(s)\\n';
                     }
                     if (result.whatsapp_sent) {
-                        successMsg += '✅ WhatsApp message sent\\n';
+                        successMsg += '✅ WhatsApp sent to ' + result.whatsapp_sent + ' recipient(s)\\n';
                     }
                     alert(successMsg);
                     closeModal();
@@ -1194,9 +1416,13 @@ async def dashboard():
         
         // Handle modal close on outside click
         window.onclick = function(event) {
-            const modal = document.getElementById('notificationModal');
-            if (event.target === modal) {
+            const notificationModal = document.getElementById('notificationModal');
+            const whatsappModal = document.getElementById('whatsappModal');
+            
+            if (event.target === notificationModal) {
                 closeModal();
+            } else if (event.target === whatsappModal) {
+                closeWhatsAppModal();
             }
         }
     </script>
@@ -1295,12 +1521,102 @@ async def get_zones():
     return JSONResponse(content={'accounts': accounts_data})
 
 
+@app.get("/api/whatsapp/{account_id}")
+async def get_whatsapp_contacts(account_id: str):
+    """Get WhatsApp contacts for an account."""
+    contacts = whatsapp_contacts.get(account_id, [])
+    return JSONResponse(content={'contacts': contacts})
+
+
+@app.post("/api/whatsapp")
+async def add_whatsapp_contact(data: dict):
+    """Add or update a WhatsApp contact."""
+    account_id = data.get('account_id')
+    contact_data = data.get('contact')
+    
+    if not account_id or not contact_data:
+        return JSONResponse(
+            content={'success': False, 'message': 'Missing account_id or contact data'},
+            status_code=400
+        )
+    
+    # Validate contact data
+    if not contact_data.get('phone') or not contact_data.get('name'):
+        return JSONResponse(
+            content={'success': False, 'message': 'Phone number and name are required'},
+            status_code=400
+        )
+    
+    # Initialize account contacts list if it doesn't exist
+    if account_id not in whatsapp_contacts:
+        whatsapp_contacts[account_id] = []
+    
+    # Generate contact ID if not provided (for new contacts)
+    if 'id' not in contact_data:
+        import uuid
+        contact_data['id'] = str(uuid.uuid4())
+    
+    # Check if updating existing contact
+    existing_index = None
+    for i, contact in enumerate(whatsapp_contacts[account_id]):
+        if contact['id'] == contact_data['id']:
+            existing_index = i
+            break
+    
+    if existing_index is not None:
+        # Update existing contact
+        whatsapp_contacts[account_id][existing_index] = contact_data
+    else:
+        # Add new contact
+        whatsapp_contacts[account_id].append(contact_data)
+    
+    # Save to file
+    save_whatsapp_contacts()
+    
+    return JSONResponse(content={'success': True, 'contact': contact_data})
+
+
+@app.delete("/api/whatsapp/{contact_id}")
+async def delete_whatsapp_contact(contact_id: str, account_id: str = None):
+    """Delete a WhatsApp contact."""
+    if not account_id:
+        return JSONResponse(
+            content={'success': False, 'message': 'account_id parameter is required'},
+            status_code=400
+        )
+    
+    if account_id not in whatsapp_contacts:
+        return JSONResponse(
+            content={'success': False, 'message': 'Account not found'},
+            status_code=404
+        )
+    
+    # Find and remove the contact
+    contact_found = False
+    for i, contact in enumerate(whatsapp_contacts[account_id]):
+        if contact['id'] == contact_id:
+            whatsapp_contacts[account_id].pop(i)
+            contact_found = True
+            break
+    
+    if not contact_found:
+        return JSONResponse(
+            content={'success': False, 'message': 'Contact not found'},
+            status_code=404
+        )
+    
+    # Save to file
+    save_whatsapp_contacts()
+    
+    return JSONResponse(content={'success': True})
+
+
 @app.post("/api/notify")
 async def send_notification(data: dict):
     """Send notification for an account."""
     account_id = data.get('account_id')
     emails = data.get('emails', [])
-    whatsapp_number = data.get('whatsapp_number', '')
+    whatsapp_numbers = data.get('whatsapp_numbers', [])
     message = data.get('message', '')
     
     if not account_id:
@@ -1309,7 +1625,7 @@ async def send_notification(data: dict):
             status_code=400
         )
     
-    if not emails and not whatsapp_number:
+    if not emails and not whatsapp_numbers:
         return JSONResponse(
             content={'success': False, 'message': 'No recipients specified'},
             status_code=400
@@ -1392,27 +1708,31 @@ async def send_notification(data: dict):
                 email_sent = len(emails)
                 logger.info(f"Email saved to {filename} (SMTP not configured)")
         
-        # Send WhatsApp if requested
-        if whatsapp_number:
+        # Send WhatsApp messages if requested
+        whatsapp_sent_count = 0
+        if whatsapp_numbers:
             whatsapp_service = get_whatsapp_service()
             if whatsapp_service and whatsapp_service.enabled:
                 # Format message for WhatsApp
                 whatsapp_msg = f"🚨 Zone Alert - {account_info['name']}\n\n{message}"
                 
-                # Send WhatsApp message
-                result = await whatsapp_service.send_message(whatsapp_number, whatsapp_msg)
-                if result['success']:
-                    whatsapp_sent = True
-                    logger.info(f"WhatsApp sent to {whatsapp_number}")
-                else:
-                    logger.error(f"WhatsApp failed: {result.get('error')}")
+                # Send WhatsApp message to each number
+                for phone_number in whatsapp_numbers:
+                    result = await whatsapp_service.send_message(phone_number, whatsapp_msg)
+                    if result['success']:
+                        whatsapp_sent_count += 1
+                        logger.info(f"WhatsApp sent to {phone_number}")
+                    else:
+                        logger.error(f"WhatsApp failed for {phone_number}: {result.get('error')}")
+                
+                whatsapp_sent = whatsapp_sent_count > 0
             else:
                 logger.info("WhatsApp service not enabled")
         
         return JSONResponse(content={
             'success': True,
             'email_sent': email_sent,
-            'whatsapp_sent': whatsapp_sent
+            'whatsapp_sent': whatsapp_sent_count
         })
             
     except Exception as e:

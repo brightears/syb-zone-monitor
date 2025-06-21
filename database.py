@@ -95,6 +95,25 @@ class ZoneDatabase:
                 CREATE INDEX IF NOT EXISTS idx_zone_history_changed_at 
                 ON zone_history(changed_at)
             """)
+            
+            # WhatsApp contacts table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS whatsapp_contacts (
+                    id SERIAL PRIMARY KEY,
+                    account_id VARCHAR(255) NOT NULL,
+                    account_name VARCHAR(255) NOT NULL,
+                    contact_name VARCHAR(255),
+                    whatsapp_number VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE(account_id, whatsapp_number)
+                )
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_account_id 
+                ON whatsapp_contacts(account_id)
+            """)
     
     async def save_zone_status(self, zone_id: str, zone_name: str, status: str, 
                               details: Dict, offline_since: Optional[datetime] = None,
@@ -269,6 +288,82 @@ class ZoneDatabase:
                     
         except Exception as e:
             logger.error(f"Error cleaning up history: {e}")
+    
+    async def add_whatsapp_contact(self, account_id: str, account_name: str, 
+                                  contact_name: str, whatsapp_number: str) -> bool:
+        """Add a WhatsApp contact for an account."""
+        if not self.pool:
+            return False
+            
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO whatsapp_contacts 
+                    (account_id, account_name, contact_name, whatsapp_number)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (account_id, whatsapp_number) 
+                    DO UPDATE SET
+                        contact_name = EXCLUDED.contact_name,
+                        updated_at = NOW()
+                """, account_id, account_name, contact_name, whatsapp_number)
+                
+                logger.info(f"Added WhatsApp contact for {account_name}: {whatsapp_number}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error adding WhatsApp contact: {e}")
+            return False
+    
+    async def get_whatsapp_contacts(self, account_id: str) -> List[Dict]:
+        """Get WhatsApp contacts for an account."""
+        if not self.pool:
+            return []
+            
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT id, contact_name, whatsapp_number, created_at
+                    FROM whatsapp_contacts
+                    WHERE account_id = $1
+                    ORDER BY contact_name, whatsapp_number
+                """, account_id)
+                
+                contacts = []
+                for row in rows:
+                    contacts.append({
+                        'id': row['id'],
+                        'contact_name': row['contact_name'],
+                        'whatsapp_number': row['whatsapp_number'],
+                        'created_at': row['created_at'].isoformat()
+                    })
+                
+                return contacts
+                
+        except Exception as e:
+            logger.error(f"Error getting WhatsApp contacts: {e}")
+            return []
+    
+    async def delete_whatsapp_contact(self, contact_id: int) -> bool:
+        """Delete a WhatsApp contact."""
+        if not self.pool:
+            return False
+            
+        try:
+            async with self.pool.acquire() as conn:
+                deleted = await conn.fetchval("""
+                    DELETE FROM whatsapp_contacts
+                    WHERE id = $1
+                    RETURNING id
+                """, contact_id)
+                
+                if deleted:
+                    logger.info(f"Deleted WhatsApp contact ID: {contact_id}")
+                    return True
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error deleting WhatsApp contact: {e}")
+            return False
     
     async def close(self):
         """Close database connections."""
