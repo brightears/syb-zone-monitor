@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 import httpx
+from database import get_database
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +22,12 @@ try:
 except ImportError:
     # WhatsApp service not available yet
     def get_whatsapp_service():
+        return None
+try:
+    from email_service import get_email_service
+except ImportError:
+    # Email service not available yet
+    def get_email_service():
         return None
 import os
 from dotenv import load_dotenv
@@ -810,6 +817,19 @@ async def dashboard():
         </div>
     </div>
     
+    <!-- Email Management Modal -->
+    <div class="modal" id="emailModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Manage Email Contacts</h2>
+                <button class="close-btn" onclick="closeEmailModal()">&times;</button>
+            </div>
+            <div id="emailModalBody">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
     <!-- Automation Settings Modal -->
     <div class="modal" id="automationModal">
         <div class="modal-content" style="max-width: 600px;">
@@ -1204,6 +1224,29 @@ async def dashboard():
                     </div>
                 </div>
                 
+                <!-- Email Contacts Section -->
+                <div class="email-section" style="margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h4 style="color: #1a1a1a; margin: 0;">
+                            <svg style="width: 1.5rem; height: 1.5rem; vertical-align: middle; margin-right: 0.25rem;" viewBox="0 0 24 24" fill="#666">
+                                <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                            </svg>Email Contacts
+                        </h4>
+                        <button class="btn-secondary" onclick="showEmailManagementModal('${accountId}')" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">
+                            Manage Contacts
+                        </button>
+                    </div>
+                    <div id="emailContactsList">
+                        <!-- Email contacts will be loaded here -->
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <input type="email" id="emailAddress" placeholder="email@example.com (Quick send)" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.875rem; background: white;">
+                        <div style="font-size: 0.75rem; color: #666666; margin-top: 0.5rem;">
+                            Enter email for one-time send, or manage contacts above for regular use
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="modal-actions">
                     <button class="btn-secondary" onclick="closeModal()">Cancel</button>
                     <button class="btn-primary" onclick="sendNotification('${accountId}')">
@@ -1225,6 +1268,9 @@ async def dashboard():
             } else {
                 whatsappList.innerHTML = '<div style="color: #666666; font-size: 0.875rem; text-align: center; padding: 1rem;">No WhatsApp contacts saved. Use "Manage Contacts" to add some.</div>';
             }
+            
+            // Load email contacts
+            loadEmailContacts(accountId);
             
             // Initialize with offline template
             setTimeout(() => {
@@ -1582,11 +1628,175 @@ async def dashboard():
             }
         }
         
+        // Email Management Functions
+        async function showEmailManagementModal(accountId) {
+            window.currentAccountId = accountId;
+            const modal = document.getElementById('emailModal');
+            const modalBody = document.getElementById('emailModalBody');
+            
+            // Fetch current email contacts
+            try {
+                const response = await fetch(`/api/email/${accountId}`);
+                const data = await response.json();
+                const contacts = data.contacts || [];
+                
+                modalBody.innerHTML = `
+                    <div class="contact-form">
+                        <h3>Add Email Contact</h3>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                            <input type="text" id="newEmailName" placeholder="Contact name" style="flex: 1; padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 4px;">
+                            <input type="email" id="newEmailAddress" placeholder="email@example.com" style="flex: 1; padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 4px;">
+                            <select id="newEmailRole" style="padding: 0.5rem; border: 1px solid #e5e5e5; border-radius: 4px;">
+                                <option value="Manager">Manager</option>
+                                <option value="Owner">Owner</option>
+                                <option value="Admin">Admin</option>
+                                <option value="Staff">Staff</option>
+                            </select>
+                            <button class="btn-primary" onclick="addEmailContact()" style="padding: 0.5rem 1rem;">Add</button>
+                        </div>
+                    </div>
+                    
+                    <div class="contacts-list">
+                        <h3>Current Email Contacts</h3>
+                        <div id="emailContactsList" style="max-height: 300px; overflow-y: auto;">
+                            ${contacts.length > 0 ? contacts.map(contact => `
+                                <div class="contact-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; margin-bottom: 0.5rem; background: ${contact.source === 'api' ? '#f0f0f0' : '#fff'}; border: 1px solid #e5e5e5; border-radius: 4px;">
+                                    <div>
+                                        <strong>${contact.contact_name}</strong> - ${contact.email}
+                                        <span style="font-size: 0.8rem; color: #666; margin-left: 0.5rem;">(${contact.role})</span>
+                                        ${contact.source === 'api' ? '<span style="font-size: 0.8rem; color: #666; margin-left: 0.5rem;">[API]</span>' : ''}
+                                    </div>
+                                    ${contact.source !== 'api' && contact.id ? `
+                                        <button class="btn-secondary" onclick="deleteEmailContact(${contact.id})" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Delete</button>
+                                    ` : ''}
+                                </div>
+                            `).join('') : '<p style="color: #666;">No email contacts found.</p>'}
+                        </div>
+                    </div>
+                `;
+                
+                modal.style.display = 'flex';
+            } catch (error) {
+                alert('Error loading email contacts: ' + error.message);
+            }
+        }
+        
+        function closeEmailModal() {
+            document.getElementById('emailModal').style.display = 'none';
+            // Refresh email contacts in notification modal if it's open
+            if (document.getElementById('notificationModal').style.display !== 'none') {
+                loadEmailContacts(window.currentAccountId);
+            }
+        }
+        
+        async function addEmailContact() {
+            const name = document.getElementById('newEmailName').value.trim();
+            const email = document.getElementById('newEmailAddress').value.trim();
+            const role = document.getElementById('newEmailRole').value;
+            
+            if (!name || !email) {
+                alert('Please enter both name and email address');
+                return;
+            }
+            
+            // Find account name
+            let accountName = '';
+            for (const acc of allData.accounts || []) {
+                if (acc.id === window.currentAccountId) {
+                    accountName = acc.name;
+                    break;
+                }
+            }
+            
+            try {
+                const response = await fetch('/api/email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        account_id: window.currentAccountId,
+                        account_name: accountName,
+                        contact_name: name,
+                        email: email,
+                        role: role
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('newEmailName').value = '';
+                    document.getElementById('newEmailAddress').value = '';
+                    showEmailManagementModal(window.currentAccountId);
+                } else {
+                    alert('Failed to add contact: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error adding contact: ' + error.message);
+            }
+        }
+        
+        async function deleteEmailContact(contactId) {
+            if (!confirm('Are you sure you want to delete this contact?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/email/${contactId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showEmailManagementModal(window.currentAccountId);
+                } else {
+                    alert('Failed to delete contact: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error deleting contact: ' + error.message);
+            }
+        }
+        
+        async function loadEmailContacts(accountId) {
+            try {
+                const response = await fetch(`/api/email/${accountId}`);
+                const data = await response.json();
+                const contacts = data.contacts || [];
+                
+                const emailList = document.getElementById('emailContactsList');
+                if (contacts.length > 0) {
+                    emailList.innerHTML = `
+                        <div class="contact-list">
+                            ${contacts.map(contact => `
+                                <label style="display: flex; align-items: center; padding: 0.5rem; margin-bottom: 0.25rem; background: ${contact.source === 'api' ? '#f9f9f9' : '#fff'}; border-radius: 4px; cursor: pointer;">
+                                    <input type="checkbox" name="emailContact" value="${contact.email}" style="margin-right: 0.75rem;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 500;">${contact.contact_name}</div>
+                                        <div style="font-size: 0.875rem; color: #666;">${contact.email}</div>
+                                        <div style="font-size: 0.75rem; color: #999;">${contact.role} ${contact.source === 'api' ? '[API]' : '[Manual]'}</div>
+                                    </div>
+                                </label>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    emailList.innerHTML = '<div style="color: #666666; font-size: 0.875rem; text-align: center; padding: 1rem;">No email contacts found. Use "Manage Contacts" to add some.</div>';
+                }
+            } catch (error) {
+                console.error('Error loading email contacts:', error);
+            }
+        }
+        
         async function sendNotification(accountId) {
             const selectedEmails = [];
             const selectedWhatsAppNumbers = [];
             
             // Get selected email contacts
+            document.querySelectorAll('input[name="emailContact"]:checked').forEach(checkbox => {
+                selectedEmails.push(checkbox.value);
+            });
+            
+            // Get selected WhatsApp contacts  
             document.querySelectorAll('#modalBody input[type="checkbox"]:checked').forEach(checkbox => {
                 if (checkbox.id.startsWith('contact_')) {
                     selectedEmails.push(checkbox.value);
@@ -1594,6 +1804,12 @@ async def dashboard():
                     selectedWhatsAppNumbers.push(checkbox.value);
                 }
             });
+            
+            // Add manual email if provided
+            const emailAddress = document.getElementById('emailAddress').value.trim();
+            if (emailAddress) {
+                selectedEmails.push(emailAddress);
+            }
             
             // Add manual WhatsApp number if provided
             const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
@@ -2048,6 +2264,127 @@ async def delete_whatsapp_contact(contact_id: str, account_id: str = None):
     return JSONResponse(content={'success': True})
 
 
+# Email contact endpoints
+@app.get("/api/email/{account_id}")
+async def get_email_contacts_endpoint(account_id: str):
+    """Get email contacts for an account (both API and manual)."""
+    db = await get_database()
+    
+    # Get manual contacts from database
+    manual_contacts = []
+    if db:
+        manual_contacts = await db.get_email_contacts(account_id)
+    
+    # Get API contacts from the JSON file
+    api_contacts = []
+    if account_id in contact_data:
+        for contact in contact_data[account_id]:
+            if contact.get('email'):
+                api_contacts.append({
+                    'contact_name': contact.get('name', 'Unknown'),
+                    'email': contact['email'],
+                    'role': contact.get('role', 'Unknown'),
+                    'source': 'api'
+                })
+    
+    # Combine both sources
+    all_contacts = api_contacts + manual_contacts
+    
+    return JSONResponse(content={'contacts': all_contacts})
+
+
+@app.post("/api/email")
+async def add_email_contact_endpoint(data: dict):
+    """Add or update an email contact."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(
+            content={'success': False, 'message': 'Database not available'},
+            status_code=500
+        )
+    
+    account_id = data.get('account_id')
+    account_name = data.get('account_name', '')
+    contact_name = data.get('contact_name')
+    email = data.get('email')
+    role = data.get('role', 'Manager')
+    
+    if not all([account_id, contact_name, email]):
+        return JSONResponse(
+            content={'success': False, 'message': 'Missing required fields'},
+            status_code=400
+        )
+    
+    # Find account name if not provided
+    if not account_name:
+        for acc in monitor.accounts:
+            if acc['id'] == account_id:
+                account_name = acc['name']
+                break
+    
+    success = await db.add_email_contact(account_id, account_name, contact_name, email, role)
+    
+    if success:
+        return JSONResponse(content={'success': True})
+    else:
+        return JSONResponse(
+            content={'success': False, 'message': 'Failed to add contact'},
+            status_code=500
+        )
+
+
+@app.delete("/api/email/{contact_id}")
+async def delete_email_contact_endpoint(contact_id: int):
+    """Delete an email contact."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(
+            content={'success': False, 'message': 'Database not available'},
+            status_code=500
+        )
+    
+    success = await db.delete_email_contact(contact_id)
+    
+    if success:
+        return JSONResponse(content={'success': True})
+    else:
+        return JSONResponse(
+            content={'success': False, 'message': 'Contact not found or deletion failed'},
+            status_code=404
+        )
+
+
+@app.put("/api/email/{contact_id}")
+async def update_email_contact_endpoint(contact_id: int, data: dict):
+    """Update an email contact."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(
+            content={'success': False, 'message': 'Database not available'},
+            status_code=500
+        )
+    
+    contact_name = data.get('contact_name')
+    email = data.get('email')
+    role = data.get('role')
+    
+    if not all([contact_name, email, role]):
+        return JSONResponse(
+            content={'success': False, 'message': 'Missing required fields'},
+            status_code=400
+        )
+    
+    success = await db.update_email_contact(contact_id, contact_name, email, role)
+    
+    if success:
+        return JSONResponse(content={'success': True})
+    else:
+        return JSONResponse(
+            content={'success': False, 'message': 'Contact not found or update failed'},
+            status_code=404
+        )
+
+
 @app.post("/api/notify")
 async def send_notification(data: dict):
     """Send notification for an account."""
@@ -2077,34 +2414,35 @@ async def send_notification(data: dict):
             status_code=404
         )
     
-    # Send actual email
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
+    # Get zone status information for notification
+    zones_info = {
+        'offline_zones': [],
+        'expired_zones': [],
+        'unpaired_zones': []
+    }
     
-    # Get SMTP settings from environment
-    smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-    smtp_port = int(os.getenv('SMTP_PORT', '587'))
-    smtp_username = os.getenv('SMTP_USERNAME', '')
-    smtp_password = os.getenv('SMTP_PASSWORD', '')
-    email_from = os.getenv('EMAIL_FROM', 'support@bmasiamusic.com')
-    
-    # Build zone status details
-    zone_details = []
-    for location in account_info.get('locations', []):
-        for zone in location.get('zones', []):
-            zone_id = zone.get('id')
-            if zone_id and zone_id in zone_monitor.zone_states:
-                status = zone_monitor.zone_states[zone_id]
-                zone_details.append(f"• {zone['name']}: {status}")
-    
-    # Create email
-    subject = f"Zone Status Alert - {account_info['name']}"
-    
-    # Add zone details to message if any
-    full_message = email_message
-    if zone_details:
-        full_message += f"\n\n--- Current Zone Status ---\n" + "\n".join(zone_details)
+    if zone_monitor:
+        for location in account_info.get('locations', []):
+            for zone in location.get('zones', []):
+                zone_id = zone.get('id')
+                if zone_id and zone_id in zone_monitor.zone_states:
+                    zone_state = zone_monitor.zone_states[zone_id]
+                    zone_data = {'name': zone['name'], 'id': zone_id}
+                    
+                    if zone_state == 'offline':
+                        # Get offline duration if available
+                        if hasattr(zone_monitor, 'zone_status') and zone_id in zone_monitor.zone_status:
+                            offline_since = zone_monitor.zone_status[zone_id].get('offline_since')
+                            if offline_since:
+                                duration = datetime.now() - offline_since
+                                hours = int(duration.total_seconds() // 3600)
+                                minutes = int((duration.total_seconds() % 3600) // 60)
+                                zone_data['offline_duration'] = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+                        zones_info['offline_zones'].append(zone_data)
+                    elif zone_state == 'expired':
+                        zones_info['expired_zones'].append(zone_data)
+                    elif zone_state == 'unpaired':
+                        zones_info['unpaired_zones'].append(zone_data)
     
     # Track results
     email_sent = 0
@@ -2113,38 +2451,53 @@ async def send_notification(data: dict):
     try:
         # Send email if requested
         if emails:
-            # If SMTP credentials are configured, send real email
-            if smtp_username and smtp_password:
-                msg = MIMEMultipart()
-                msg['From'] = email_from
-                msg['To'] = ', '.join(emails)
-                msg['Subject'] = subject
+            email_service = get_email_service()
+            if email_service and email_service.enabled:
+                # If using custom message, format it properly
+                if email_message:
+                    subject = f"Zone Status Alert - {account_info['name']}"
+                    body = email_message
+                else:
+                    # Use the formatted zone alert email
+                    formatted_email = email_service.format_zone_alert_email(
+                        account_info['name'], 
+                        zones_info
+                    )
+                    subject = formatted_email['subject']
+                    body = formatted_email['body']
                 
-                msg.attach(MIMEText(full_message, 'plain'))
+                # Send email to all recipients
+                result = await email_service.send_email(
+                    to_addresses=emails,
+                    subject=subject,
+                    body=body,
+                    is_html=False
+                )
                 
-                with smtplib.SMTP(smtp_host, smtp_port) as server:
-                    server.starttls()
-                    server.login(smtp_username, smtp_password)
-                    server.send_message(msg)
-                
-                email_sent = len(emails)
-                logger.info(f"Email sent to {len(emails)} recipients")
+                if result['success']:
+                    email_sent = len(result['sent_to'])
+                    logger.info(f"Email sent to {email_sent} recipients")
+                    if result.get('failed'):
+                        logger.warning(f"Failed to send to: {result['failed']}")
+                else:
+                    logger.error(f"Email service error: {result.get('error')}")
             else:
-                # Fallback: save to file if SMTP not configured
+                # Fallback: save to file if email service not configured
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"notification_{account_info['name'].replace(' ', '_')}_{timestamp}.txt"
                 
                 with open(filename, 'w') as f:
                     f.write(f"=== NOTIFICATION EMAIL ===\n\n")
                     f.write(f"TO: {', '.join(emails)}\n")
-                    f.write(f"FROM: {email_from}\n")
-                    f.write(f"SUBJECT: {subject}\n")
+                    f.write(f"FROM: noreply@bmasia.com\n")
+                    f.write(f"SUBJECT: Zone Status Alert - {account_info['name']}\n")
                     f.write(f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write(f"\n--- MESSAGE ---\n\n")
-                    f.write(full_message)
+                    f.write(email_message if email_message else 
+                           f"Zone status notification for {account_info['name']}")
                 
                 email_sent = len(emails)
-                logger.info(f"Email saved to {filename} (SMTP not configured)")
+                logger.info(f"Email saved to {filename} (Email service not configured)")
         
         # Send WhatsApp messages if requested
         whatsapp_sent_count = 0
