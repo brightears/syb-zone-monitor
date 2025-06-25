@@ -1915,6 +1915,18 @@ async def dashboard():
             const modal = document.getElementById('automationModal');
             const modalBody = document.getElementById('automationModalBody');
             
+            // Load manual email contacts
+            let manualEmailContacts = [];
+            try {
+                const response = await fetch(`/api/email/${accountId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    manualEmailContacts = data.contacts || [];
+                }
+            } catch (error) {
+                console.error('Error loading manual email contacts:', error);
+            }
+            
             modalBody.innerHTML = `
                 <div style="margin-bottom: 1.5rem;">
                     <h3 style="color: #666666; margin-bottom: 1rem;">Account: ${escapeHtml(accountName)}</h3>
@@ -1957,18 +1969,62 @@ async def dashboard():
                     
                     <div style="margin-bottom: 1rem;">
                         <h4 style="margin-bottom: 0.75rem; color: #1a1a1a;">Email Recipients</h4>
-                        <div style="max-height: 200px; overflow-y: auto;">
-                            ${account.contacts && account.contacts.length > 0 ? 
-                                account.contacts.map(contact => `
-                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 6px; margin-bottom: 0.5rem;">
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            ${(() => {
+                                // Combine API and manual contacts
+                                const allEmailContacts = [];
+                                
+                                // Add API contacts from SYB
+                                if (account.contacts && account.contacts.length > 0) {
+                                    account.contacts.forEach(contact => {
+                                        allEmailContacts.push({
+                                            email: contact.email,
+                                            name: contact.name || contact.email,
+                                            source: 'api',
+                                            isBMAsia: contact.email.endsWith('@bmasiamusic.com')
+                                        });
+                                    });
+                                }
+                                
+                                // Add manual contacts
+                                manualEmailContacts.forEach(contact => {
+                                    // Don't add if already exists
+                                    if (!allEmailContacts.find(c => c.email === contact.email)) {
+                                        allEmailContacts.push({
+                                            email: contact.email,
+                                            name: contact.contact_name,
+                                            source: 'manual',
+                                            isBMAsia: false
+                                        });
+                                    }
+                                });
+                                
+                                if (allEmailContacts.length === 0) {
+                                    return '<p style="color: #666666; font-size: 0.875rem;">No email contacts available</p>';
+                                }
+                                
+                                // Sort contacts: non-BMAsia first, then BMAsia
+                                allEmailContacts.sort((a, b) => {
+                                    if (a.isBMAsia === b.isBMAsia) return 0;
+                                    return a.isBMAsia ? 1 : -1;
+                                });
+                                
+                                return allEmailContacts.map(contact => `
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: ${contact.isBMAsia ? '#f0f0f0' : '#f5f5f5'}; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
                                         <input type="checkbox" value="${contact.email}" 
                                                ${settings.notify_emails.includes(contact.email) ? 'checked' : ''}
                                                class="automation-email-checkbox">
-                                        <span>${escapeHtml(contact.email)}</span>
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 500;">${escapeHtml(contact.email)}</div>
+                                            <div style="font-size: 0.75rem; color: #666;">
+                                                ${escapeHtml(contact.name)} 
+                                                ${contact.source === 'manual' ? '[Manual]' : '[SYB]'}
+                                                ${contact.isBMAsia ? ' - BMAsia' : ''}
+                                            </div>
+                                        </div>
                                     </label>
-                                `).join('') :
-                                '<p style="color: #666666; font-size: 0.875rem;">No email contacts available</p>'
-                            }
+                                `).join('');
+                            })()}
                         </div>
                     </div>
                     
