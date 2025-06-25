@@ -2052,6 +2052,9 @@ async def dashboard():
             const whatsappContacts = await loadWhatsAppContacts(accountId);
             const container = document.getElementById('automationWhatsAppList');
             
+            console.log('WhatsApp contacts loaded for automation:', whatsappContacts);
+            console.log('Selected numbers:', selectedNumbers);
+            
             if (whatsappContacts.length > 0) {
                 container.innerHTML = whatsappContacts.map(contact => `
                     <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 6px; margin-bottom: 0.5rem;">
@@ -2239,8 +2242,24 @@ async def get_zones():
 @app.get("/api/whatsapp/{account_id}")
 async def get_whatsapp_contacts(account_id: str):
     """Get WhatsApp contacts for an account."""
-    contacts = whatsapp_contacts.get(account_id, [])
-    return JSONResponse(content={'contacts': contacts})
+    db = await get_database()
+    if db:
+        # Get contacts from database
+        contacts = await db.get_whatsapp_contacts(account_id)
+        # Format contacts to match expected structure
+        formatted_contacts = []
+        for contact in contacts:
+            formatted_contacts.append({
+                'id': contact['id'],
+                'name': contact['contact_name'],
+                'phone': contact['whatsapp_number'],
+                'created_at': contact.get('created_at')
+            })
+        return JSONResponse(content={'contacts': formatted_contacts})
+    else:
+        # Fallback to file-based storage
+        contacts = whatsapp_contacts.get(account_id, [])
+        return JSONResponse(content={'contacts': contacts})
 
 
 @app.post("/api/whatsapp")
@@ -2262,33 +2281,58 @@ async def add_whatsapp_contact(data: dict):
             status_code=400
         )
     
-    # Initialize account contacts list if it doesn't exist
-    if account_id not in whatsapp_contacts:
-        whatsapp_contacts[account_id] = []
-    
-    # Generate contact ID if not provided (for new contacts)
-    if 'id' not in contact_data:
-        import uuid
-        contact_data['id'] = str(uuid.uuid4())
-    
-    # Check if updating existing contact
-    existing_index = None
-    for i, contact in enumerate(whatsapp_contacts[account_id]):
-        if contact['id'] == contact_data['id']:
-            existing_index = i
-            break
-    
-    if existing_index is not None:
-        # Update existing contact
-        whatsapp_contacts[account_id][existing_index] = contact_data
+    db = await get_database()
+    if db:
+        # Find account name
+        account_name = ''
+        account_info = discovered_data.get(account_id)
+        if account_info:
+            account_name = account_info.get('name', '')
+        
+        # Add to database
+        success = await db.add_whatsapp_contact(
+            account_id, 
+            account_name, 
+            contact_data['name'], 
+            contact_data['phone']
+        )
+        
+        if success:
+            return JSONResponse(content={'success': True})
+        else:
+            return JSONResponse(
+                content={'success': False, 'message': 'Failed to add contact'},
+                status_code=500
+            )
     else:
-        # Add new contact
-        whatsapp_contacts[account_id].append(contact_data)
-    
-    # Save to file
-    save_whatsapp_contacts()
-    
-    return JSONResponse(content={'success': True, 'contact': contact_data})
+        # Fallback to file-based storage
+        # Initialize account contacts list if it doesn't exist
+        if account_id not in whatsapp_contacts:
+            whatsapp_contacts[account_id] = []
+        
+        # Generate contact ID if not provided (for new contacts)
+        if 'id' not in contact_data:
+            import uuid
+            contact_data['id'] = str(uuid.uuid4())
+        
+        # Check if updating existing contact
+        existing_index = None
+        for i, contact in enumerate(whatsapp_contacts[account_id]):
+            if contact['id'] == contact_data['id']:
+                existing_index = i
+                break
+        
+        if existing_index is not None:
+            # Update existing contact
+            whatsapp_contacts[account_id][existing_index] = contact_data
+        else:
+            # Add new contact
+            whatsapp_contacts[account_id].append(contact_data)
+        
+        # Save to file
+        save_whatsapp_contacts()
+        
+        return JSONResponse(content={'success': True, 'contact': contact_data})
 
 
 @app.delete("/api/whatsapp/{contact_id}")
@@ -2300,30 +2344,50 @@ async def delete_whatsapp_contact(contact_id: str, account_id: str = None):
             status_code=400
         )
     
-    if account_id not in whatsapp_contacts:
-        return JSONResponse(
-            content={'success': False, 'message': 'Account not found'},
-            status_code=404
-        )
-    
-    # Find and remove the contact
-    contact_found = False
-    for i, contact in enumerate(whatsapp_contacts[account_id]):
-        if contact['id'] == contact_id:
-            whatsapp_contacts[account_id].pop(i)
-            contact_found = True
-            break
-    
-    if not contact_found:
-        return JSONResponse(
-            content={'success': False, 'message': 'Contact not found'},
-            status_code=404
-        )
-    
-    # Save to file
-    save_whatsapp_contacts()
-    
-    return JSONResponse(content={'success': True})
+    db = await get_database()
+    if db:
+        # Use database
+        try:
+            contact_id_int = int(contact_id)
+            success = await db.delete_whatsapp_contact(contact_id_int)
+            if success:
+                return JSONResponse(content={'success': True})
+            else:
+                return JSONResponse(
+                    content={'success': False, 'message': 'Contact not found or deletion failed'},
+                    status_code=404
+                )
+        except ValueError:
+            return JSONResponse(
+                content={'success': False, 'message': 'Invalid contact ID'},
+                status_code=400
+            )
+    else:
+        # Fallback to file-based storage
+        if account_id not in whatsapp_contacts:
+            return JSONResponse(
+                content={'success': False, 'message': 'Account not found'},
+                status_code=404
+            )
+        
+        # Find and remove the contact
+        contact_found = False
+        for i, contact in enumerate(whatsapp_contacts[account_id]):
+            if contact['id'] == contact_id:
+                whatsapp_contacts[account_id].pop(i)
+                contact_found = True
+                break
+        
+        if not contact_found:
+            return JSONResponse(
+                content={'success': False, 'message': 'Contact not found'},
+                status_code=404
+            )
+        
+        # Save to file
+        save_whatsapp_contacts()
+        
+        return JSONResponse(content={'success': True})
 
 
 # Email contact endpoints
