@@ -1702,12 +1702,18 @@ async def dashboard():
             
             // Find account name
             let accountName = '';
-            for (const acc of allData.accounts || []) {
-                if (acc.id === window.currentAccountId) {
-                    accountName = acc.name;
-                    break;
-                }
+            const accounts = allData.accounts || {};
+            if (accounts[window.currentAccountId]) {
+                accountName = accounts[window.currentAccountId].name;
             }
+            
+            console.log('Adding email contact:', {
+                account_id: window.currentAccountId,
+                account_name: accountName,
+                contact_name: name,
+                email: email,
+                role: role
+            });
             
             try {
                 const response = await fetch('/api/email', {
@@ -2317,10 +2323,9 @@ async def add_email_contact_endpoint(data: dict):
     
     # Find account name if not provided
     if not account_name:
-        for acc in monitor.accounts:
-            if acc['id'] == account_id:
-                account_name = acc['name']
-                break
+        account_info = discovered_data.get(account_id)
+        if account_info:
+            account_name = account_info.get('name', '')
     
     success = await db.add_email_contact(account_id, account_name, contact_name, email, role)
     
