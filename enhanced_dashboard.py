@@ -2791,6 +2791,76 @@ async def get_conversation_messages(conversation_id: int):
     return JSONResponse(content={"messages": messages})
 
 
+@app.post("/api/whatsapp/send")
+async def send_whatsapp_reply(data: dict):
+    """Send a WhatsApp message as a reply."""
+    try:
+        conversation_id = data.get("conversation_id")
+        message_text = data.get("message")
+        
+        if not conversation_id or not message_text:
+            return JSONResponse(
+                content={"success": False, "message": "Missing required fields"},
+                status_code=400
+            )
+        
+        # Get database
+        db = await get_database()
+        if not db:
+            return JSONResponse(
+                content={"success": False, "message": "Database not available"},
+                status_code=500
+            )
+        
+        # Get conversation details
+        conversations = await db.get_conversations()
+        conversation = next((c for c in conversations if c["id"] == conversation_id), None)
+        
+        if not conversation:
+            return JSONResponse(
+                content={"success": False, "message": "Conversation not found"},
+                status_code=404
+            )
+        
+        # Send message via WhatsApp service
+        whatsapp_service = get_whatsapp_service()
+        if not whatsapp_service or not whatsapp_service.enabled:
+            return JSONResponse(
+                content={"success": False, "message": "WhatsApp service not available"},
+                status_code=500
+            )
+        
+        # Send the message
+        result = await whatsapp_service.send_message(
+            to_number=conversation["phone_number"],
+            message=message_text
+        )
+        
+        if result["success"]:
+            # Save outbound message
+            await db.save_whatsapp_message(
+                conversation_id=conversation_id,
+                wa_message_id=result.get("message_id", ""),
+                direction="outbound",
+                message_text=message_text,
+                status="sent"
+            )
+            
+            return JSONResponse(content={"success": True, "message_id": result.get("message_id")})
+        else:
+            return JSONResponse(
+                content={"success": False, "message": result.get("error", "Failed to send")},
+                status_code=500
+            )
+            
+    except Exception as e:
+        logger.error(f"Error sending WhatsApp reply: {e}")
+        return JSONResponse(
+            content={"success": False, "message": str(e)},
+            status_code=500
+        )
+
+
 # Note: This endpoint must come AFTER more specific /api/whatsapp/* endpoints
 # to avoid route conflicts
 @app.get("/api/whatsapp/{account_id}")
@@ -3441,80 +3511,6 @@ async def test_database_connection():
             "message": str(e),
             "database_url": "CONFIGURED" if os.getenv('DATABASE_URL') else "NOT SET"
         })
-
-
-# WhatsApp conversation API endpoints - these must come BEFORE the generic /api/whatsapp/{account_id} endpoint
-# Move these endpoints before the /api/whatsapp/{account_id} endpoint
-
-
-@app.post("/api/whatsapp/send")
-async def send_whatsapp_reply(data: dict):
-    """Send a WhatsApp message as a reply."""
-    try:
-        conversation_id = data.get("conversation_id")
-        message_text = data.get("message")
-        
-        if not conversation_id or not message_text:
-            return JSONResponse(
-                content={"success": False, "message": "Missing required fields"},
-                status_code=400
-            )
-        
-        # Get database
-        db = await get_database()
-        if not db:
-            return JSONResponse(
-                content={"success": False, "message": "Database not available"},
-                status_code=500
-            )
-        
-        # Get conversation details
-        conversations = await db.get_conversations()
-        conversation = next((c for c in conversations if c["id"] == conversation_id), None)
-        
-        if not conversation:
-            return JSONResponse(
-                content={"success": False, "message": "Conversation not found"},
-                status_code=404
-            )
-        
-        # Send message via WhatsApp service
-        whatsapp_service = get_whatsapp_service()
-        if not whatsapp_service or not whatsapp_service.enabled:
-            return JSONResponse(
-                content={"success": False, "message": "WhatsApp service not available"},
-                status_code=500
-            )
-        
-        # Send the message
-        result = await whatsapp_service.send_message(
-            to_number=conversation["phone_number"],
-            message=message_text
-        )
-        
-        if result["success"]:
-            # Save outbound message
-            await db.save_whatsapp_message(
-                conversation_id=conversation_id,
-                wa_message_id=result.get("message_id", ""),
-                direction="outbound",
-                message_text=message_text,
-                status="sent"
-            )
-            
-            return JSONResponse(content={"success": True, "message_id": result.get("message_id")})
-        else:
-            return JSONResponse(
-                content={"success": False, "message": result.get("error", "Failed to send")},
-                status_code=500
-            )
-            
-    except Exception as e:
-        logger.error(f"Error sending WhatsApp reply: {e}")
-        return JSONResponse(
-            content={"success": False, "message": str(e)},
-            status_code=500
-        )
 
 
 async def check_automation_triggers():
