@@ -2476,7 +2476,8 @@ async def dashboard():
         async function loadConversations() {
             try {
                 const response = await fetch('/api/whatsapp/conversations');
-                conversations = await response.json();
+                const data = await response.json();
+                conversations = data.conversations || [];
                 renderConversations();
                 updateUnreadBadge();
             } catch (error) {
@@ -2549,7 +2550,8 @@ async def dashboard():
         async function loadMessages(conversationId) {
             try {
                 const response = await fetch(`/api/whatsapp/conversations/${conversationId}/messages`);
-                const messages = await response.json();
+                const data = await response.json();
+                const messages = data.messages || [];
                 renderMessages(messages);
             } catch (error) {
                 console.error('Error loading messages:', error);
