@@ -2768,6 +2768,31 @@ async def get_zones():
     return JSONResponse(content={'accounts': accounts_data})
 
 
+# WhatsApp conversation API endpoints
+@app.get("/api/whatsapp/conversations")
+async def get_conversations():
+    """Get WhatsApp conversations."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(content={"conversations": []})
+    
+    conversations = await db.get_conversations()
+    return JSONResponse(content={"conversations": conversations})
+
+
+@app.get("/api/whatsapp/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: int):
+    """Get messages for a conversation."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(content={"messages": []})
+    
+    messages = await db.get_conversation_messages(conversation_id)
+    return JSONResponse(content={"messages": messages})
+
+
+# Note: This endpoint must come AFTER more specific /api/whatsapp/* endpoints
+# to avoid route conflicts
 @app.get("/api/whatsapp/{account_id}")
 async def get_whatsapp_contacts(account_id: str):
     """Get WhatsApp contacts for an account."""
@@ -3418,27 +3443,8 @@ async def test_database_connection():
         })
 
 
-# WhatsApp conversation API endpoints
-@app.get("/api/whatsapp/conversations")
-async def get_conversations():
-    """Get WhatsApp conversations."""
-    db = await get_database()
-    if not db:
-        return JSONResponse(content={"conversations": []})
-    
-    conversations = await db.get_conversations()
-    return JSONResponse(content={"conversations": conversations})
-
-
-@app.get("/api/whatsapp/conversations/{conversation_id}/messages")
-async def get_conversation_messages(conversation_id: int):
-    """Get messages for a conversation."""
-    db = await get_database()
-    if not db:
-        return JSONResponse(content={"messages": []})
-    
-    messages = await db.get_conversation_messages(conversation_id)
-    return JSONResponse(content={"messages": messages})
+# WhatsApp conversation API endpoints - these must come BEFORE the generic /api/whatsapp/{account_id} endpoint
+# Move these endpoints before the /api/whatsapp/{account_id} endpoint
 
 
 @app.post("/api/whatsapp/send")
