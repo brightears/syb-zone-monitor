@@ -2791,6 +2791,28 @@ async def get_conversation_messages(conversation_id: int):
     return JSONResponse(content={"messages": messages})
 
 
+@app.get("/api/whatsapp/debug")
+async def debug_whatsapp():
+    """Debug endpoint to check WhatsApp configuration."""
+    whatsapp_service = get_whatsapp_service()
+    
+    debug_info = {
+        'service_available': whatsapp_service is not None,
+        'env_phone_id': os.getenv('WHATSAPP_PHONE_NUMBER_ID', 'NOT SET'),
+        'env_enabled': os.getenv('WHATSAPP_ENABLED', 'NOT SET'),
+        'token_exists': bool(os.getenv('WHATSAPP_ACCESS_TOKEN'))
+    }
+    
+    if whatsapp_service:
+        debug_info.update({
+            'service_enabled': whatsapp_service.enabled,
+            'service_phone_id': whatsapp_service.phone_number_id,
+            'token_preview': f"{whatsapp_service.access_token[:20]}...{whatsapp_service.access_token[-20:]}" if whatsapp_service.access_token else 'NOT SET'
+        })
+    
+    return JSONResponse(content=debug_info)
+
+
 @app.post("/api/whatsapp/send")
 async def send_whatsapp_reply(data: dict):
     """Send a WhatsApp message as a reply."""
@@ -3281,26 +3303,6 @@ async def send_notification(data: dict):
         }, status_code=500)
 
 
-@app.get("/api/whatsapp/debug")
-async def debug_whatsapp():
-    """Debug endpoint to check WhatsApp configuration."""
-    whatsapp_service = get_whatsapp_service()
-    
-    debug_info = {
-        'service_available': whatsapp_service is not None,
-        'env_phone_id': os.getenv('WHATSAPP_PHONE_NUMBER_ID', 'NOT SET'),
-        'env_enabled': os.getenv('WHATSAPP_ENABLED', 'NOT SET'),
-        'token_exists': bool(os.getenv('WHATSAPP_ACCESS_TOKEN'))
-    }
-    
-    if whatsapp_service:
-        debug_info.update({
-            'service_enabled': whatsapp_service.enabled,
-            'service_phone_id': whatsapp_service.phone_number_id,
-            'token_preview': f"{whatsapp_service.access_token[:20]}...{whatsapp_service.access_token[-20:]}" if whatsapp_service.access_token else 'NOT SET'
-        })
-    
-    return JSONResponse(content=debug_info)
 
 
 @app.get("/api/automation/settings")
