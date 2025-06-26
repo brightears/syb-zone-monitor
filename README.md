@@ -4,19 +4,32 @@ Real-time monitoring and notification system for Soundtrack Your Brand (SYB) zon
 
 ## Features
 
+### Zone Monitoring
 - **Real-time Monitoring**: Tracks online/offline status of 2,536 music zones across 855 business accounts
-- **Web Dashboard**: Clean, modern interface with responsive design
-- **Performance Optimized**: Parallel zone checking completes in under 2 minutes
-- **Smart Notifications**: Account-specific email notifications with contact filtering
+- **Now Playing Display**: Shows current track, artist, album, and playlist/schedule for online zones
+- **Multiple Zone Statuses**: Connected, Offline, No Paired Device, Subscription Expired, No Subscription
 - **Offline Duration Tracking**: Shows how long zones have been offline
-- **Multiple Zone Statuses**: Connected, Offline, No Paired Device, Subscription Expired
+- **PostgreSQL Persistence**: Zone states saved to database for instant loading
+
+### Notifications
+- **WhatsApp Integration**: Send custom messages to business contacts
+- **Email Notifications**: SMTP integration + manual contact management
+- **Automatic Alerts**: Configurable per-account automation for offline zones
+- **Smart Cooldowns**: Prevents notification spam with configurable cooldown periods
+
+### Dashboard Features
+- **Web Dashboard**: Clean, modern interface with BMAsia branding
+- **Auto-refresh**: Updates every 30 seconds
 - **Search & Filter**: Find accounts and zones quickly
-- **Automatic Discovery**: Discovers zones and contacts from configured accounts
+- **WhatsApp Conversations**: View and reply to incoming WhatsApp messages
+- **Contact Management**: Add/edit/remove email and WhatsApp contacts per account
 
 ## Technology Stack
 
-- **Backend**: Python 3.x, FastAPI
+- **Backend**: Python 3.x, FastAPI, Pydantic
+- **Database**: PostgreSQL with asyncpg
 - **API Integration**: SYB GraphQL API
+- **WhatsApp**: Meta Cloud API with webhooks
 - **Frontend**: HTML/CSS/JavaScript (embedded)
 - **Deployment**: Render Web Service
 
@@ -56,7 +69,24 @@ Visit http://localhost:8000 to view the dashboard.
 
 ## Environment Variables
 
-- `SYB_API_KEY` (required): Your Soundtrack Your Brand API key
+### Required
+- `SYB_API_KEY`: Your Soundtrack Your Brand API key
+- `ZONE_IDS`: Comma-separated list of zone IDs (loaded from discovery)
+- `DATABASE_URL`: PostgreSQL connection string
+
+### WhatsApp Configuration
+- `WHATSAPP_ACCESS_TOKEN`: Meta System User access token
+- `WHATSAPP_PHONE_NUMBER_ID`: WhatsApp Business phone number ID
+- `WHATSAPP_WEBHOOK_VERIFY_TOKEN`: Webhook verification token
+
+### Email Configuration (Optional)
+- `SMTP_HOST`: SMTP server hostname
+- `SMTP_PORT`: SMTP server port (default: 587)
+- `SMTP_USERNAME`: SMTP username
+- `SMTP_PASSWORD`: SMTP password
+- `EMAIL_FROM`: Sender email address
+
+### Other
 - `POLLING_INTERVAL`: Zone status check interval in seconds (default: 60)
 - `LOG_LEVEL`: Logging level (default: INFO)
 
@@ -65,10 +95,17 @@ Visit http://localhost:8000 to view the dashboard.
 1. Fork this repository
 2. Create a new Web Service on Render
 3. Connect your GitHub repository
-4. Add environment variables in Render dashboard:
-   - `SYB_API_KEY`: Your API key
-   - `ACCOUNTS_DISCOVERY_DATA`: Contents of accounts_discovery_results.json (2.3MB)
-5. Deploy!
+4. Create a PostgreSQL database on Render
+5. Add environment variables in Render dashboard:
+   - All required variables listed above
+   - `DATABASE_URL` will be automatically set by Render
+6. Deploy!
+
+### WhatsApp Webhook Setup
+1. In Meta Business Manager, set webhook URL to:
+   `https://your-app.onrender.com/webhook/whatsapp`
+2. Use your `WHATSAPP_WEBHOOK_VERIFY_TOKEN` for verification
+3. Subscribe to `messages` and `message_status` events
 
 The `render.yaml` file contains all necessary configuration for Python runtime.
 
@@ -78,11 +115,24 @@ Accounts are loaded from `accounts_discovery_results.json` which contains all 85
 
 ## API Endpoints
 
+### Dashboard
 - `/` - Main dashboard
-- `/health` - Health check endpoint
-- `/api/status` - System status
-- `/api/zones` - Get all zone data
-- `/api/notify` - Send notifications
+- `/api/zones` - Get all zone data with current status
+
+### Notifications
+- `/api/notify` - Send email/WhatsApp notifications
+- `/api/automation/settings` - Get/set automation settings
+
+### WhatsApp
+- `/webhook/whatsapp` - WhatsApp webhook endpoint
+- `/api/whatsapp/send` - Send WhatsApp message
+- `/api/whatsapp/conversations` - List conversations
+- `/api/whatsapp/conversations/{id}/messages` - Get conversation messages
+- `/api/whatsapp/conversations/{id}/reply` - Reply to conversation
+
+### Contact Management  
+- `/api/email/{account_id}` - Manage email contacts
+- `/api/whatsapp/{account_id}` - Manage WhatsApp contacts
 
 ## Development
 
@@ -90,20 +140,35 @@ Accounts are loaded from `accounts_discovery_results.json` which contains all 85
 
 ```
 syb-zone-monitor/
-├── main.py                 # Main application entry point
-├── enhanced_dashboard.py   # Dashboard UI and API
-├── zone_monitor.py        # Core monitoring logic
-├── account_config.py      # Account configuration management
-├── process_all_accounts.py # Account discovery script
-└── requirements.txt       # Python dependencies
+├── enhanced_dashboard.py      # Main dashboard UI and API
+├── zone_monitor_optimized.py  # Core monitoring with rate limiting
+├── database.py                # PostgreSQL integration
+├── config.py                  # Pydantic configuration
+├── whatsapp_service.py        # WhatsApp messaging service
+├── email_service.py           # Email notification service
+├── notification_service.py    # Unified notification handling
+├── accounts_discovery_results.json  # Discovered accounts data
+├── requirements.txt           # Python dependencies
+└── render.yaml               # Render deployment config
+```
+
+### Checkpoints
+
+The project uses git tags for version checkpoints:
+- `v5.0-stable` - Latest stable version with all features
+
+To restore a checkpoint:
+```bash
+git checkout v5.0-stable
 ```
 
 ### Adding Features
 
-1. Create a feature branch
+1. Create a feature branch from latest stable
 2. Make your changes
-3. Test locally
+3. Test locally with database
 4. Submit a pull request
+5. Create new checkpoint after major features
 
 ## License
 
