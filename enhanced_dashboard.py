@@ -3379,6 +3379,45 @@ async def process_status_update(db, status):
         logger.error(f"Error processing status update: {e}")
 
 
+# Test database connection endpoint
+@app.get("/api/test-db")
+async def test_database_connection():
+    """Test database connection and return diagnostic info."""
+    try:
+        db = await get_database()
+        if not db:
+            return JSONResponse(content={
+                "status": "error",
+                "message": "No database connection",
+                "database_url": os.getenv('DATABASE_URL', 'NOT SET')
+            })
+        
+        # Test basic query
+        conversations = await db.get_conversations()
+        
+        # Test creating a test conversation
+        test_conv_id = await db.get_or_create_conversation(
+            wa_id="test_66856644142",
+            phone_number="66856644142",
+            profile_name="Test User"
+        )
+        
+        return JSONResponse(content={
+            "status": "ok",
+            "message": "Database connected",
+            "conversation_count": len(conversations),
+            "test_conversation_id": test_conv_id,
+            "database_url": "CONFIGURED" if os.getenv('DATABASE_URL') else "NOT SET"
+        })
+        
+    except Exception as e:
+        return JSONResponse(content={
+            "status": "error",
+            "message": str(e),
+            "database_url": "CONFIGURED" if os.getenv('DATABASE_URL') else "NOT SET"
+        })
+
+
 # WhatsApp conversation API endpoints
 @app.get("/api/whatsapp/conversations")
 async def get_conversations():
