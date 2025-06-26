@@ -657,7 +657,15 @@ class ZoneDatabase:
                 params.append(limit)
                 
                 rows = await conn.fetch(query, *params)
-                return [dict(row) for row in rows]
+                # Convert datetime objects to ISO format strings
+                conversations = []
+                for row in rows:
+                    conv = dict(row)
+                    for key, value in conv.items():
+                        if isinstance(value, datetime):
+                            conv[key] = value.isoformat()
+                    conversations.append(conv)
+                return conversations
                 
         except Exception as e:
             logger.error(f"Error getting conversations: {e}")
@@ -683,7 +691,15 @@ class ZoneDatabase:
                     WHERE id = $1
                 """, conversation_id)
                 
-                return [dict(row) for row in rows]
+                # Convert datetime objects to ISO format strings
+                messages = []
+                for row in rows:
+                    msg = dict(row)
+                    for key, value in msg.items():
+                        if isinstance(value, datetime):
+                            msg[key] = value.isoformat()
+                    messages.append(msg)
+                return messages
                 
         except Exception as e:
             logger.error(f"Error getting messages: {e}")

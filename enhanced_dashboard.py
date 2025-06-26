@@ -3552,11 +3552,21 @@ async def test_whatsapp_table():
             # Get sample conversation
             sample = await conn.fetchrow("SELECT * FROM whatsapp_conversations LIMIT 1")
             
+            # Convert datetime objects to strings
+            sample_dict = None
+            if sample:
+                sample_dict = {}
+                for key, value in dict(sample).items():
+                    if isinstance(value, datetime):
+                        sample_dict[key] = value.isoformat()
+                    else:
+                        sample_dict[key] = value
+            
             return JSONResponse(content={
                 "tables": [t['table_name'] for t in tables],
                 "conversation_count": conv_count,
                 "message_count": msg_count,
-                "sample_conversation": dict(sample) if sample else None
+                "sample_conversation": sample_dict
             })
             
     except Exception as e:
