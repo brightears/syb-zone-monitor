@@ -2772,12 +2772,21 @@ async def get_zones():
 @app.get("/api/whatsapp/conversations")
 async def get_conversations():
     """Get WhatsApp conversations."""
-    db = await get_database()
-    if not db:
-        return JSONResponse(content={"conversations": []})
-    
-    conversations = await db.get_conversations()
-    return JSONResponse(content={"conversations": conversations})
+    try:
+        db = await get_database()
+        if not db:
+            logger.warning("No database connection available for conversations")
+            return JSONResponse(content={"conversations": []})
+        
+        conversations = await db.get_conversations()
+        logger.info(f"Retrieved {len(conversations)} conversations")
+        return JSONResponse(content={"conversations": conversations})
+    except Exception as e:
+        logger.error(f"Error in get_conversations endpoint: {e}")
+        return JSONResponse(
+            content={"conversations": [], "error": str(e)},
+            status_code=500
+        )
 
 
 @app.get("/api/whatsapp/conversations/{conversation_id}/messages")
@@ -3513,6 +3522,45 @@ async def test_database_connection():
             "message": str(e),
             "database_url": "CONFIGURED" if os.getenv('DATABASE_URL') else "NOT SET"
         })
+
+
+@app.get("/api/test-whatsapp-table")
+async def test_whatsapp_table():
+    """Test WhatsApp tables specifically."""
+    try:
+        db = await get_database()
+        if not db:
+            return JSONResponse(content={"error": "No database connection"})
+        
+        # Check if the pool is initialized
+        if not hasattr(db, 'pool') or not db.pool:
+            return JSONResponse(content={"error": "Database pool not initialized"})
+        
+        # Test queries directly
+        async with db.pool.acquire() as conn:
+            # Check if tables exist
+            tables = await conn.fetch("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('whatsapp_conversations', 'whatsapp_messages')
+            """)
+            
+            # Get conversation count
+            conv_count = await conn.fetchval("SELECT COUNT(*) FROM whatsapp_conversations")
+            msg_count = await conn.fetchval("SELECT COUNT(*) FROM whatsapp_messages")
+            
+            # Get sample conversation
+            sample = await conn.fetchrow("SELECT * FROM whatsapp_conversations LIMIT 1")
+            
+            return JSONResponse(content={
+                "tables": [t['table_name'] for t in tables],
+                "conversation_count": conv_count,
+                "message_count": msg_count,
+                "sample_conversation": dict(sample) if sample else None
+            })
+            
+    except Exception as e:
+        return JSONResponse(content={"error": str(e), "type": type(e).__name__})
 
 
 async def check_automation_triggers():
