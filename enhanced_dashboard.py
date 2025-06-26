@@ -440,12 +440,23 @@ async def dashboard():
             padding: 1rem;
             border-radius: 6px;
             border: 1px solid transparent;
-            display: grid;
-            grid-template-rows: 1fr auto auto;
+            display: flex;
+            flex-direction: column;
             gap: 0.5rem;
             min-height: 120px;
             position: relative;
             transition: all 0.15s ease;
+        }
+        
+        .zone-item-expanded {
+            min-height: auto;
+        }
+        
+        .zone-info {
+            display: grid;
+            grid-template-rows: 1fr auto auto;
+            gap: 0.5rem;
+            flex: 1;
         }
         
         .zone-item:hover {
@@ -528,6 +539,35 @@ async def dashboard():
             font-weight: 500;
             text-align: center;
             align-self: end;
+        }
+        
+        .zone-now-playing {
+            background: rgba(26, 26, 26, 0.05);
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(26, 26, 26, 0.1);
+        }
+        
+        .now-playing-track {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            line-height: 1.3;
+            margin-bottom: 0.25rem;
+        }
+        
+        .now-playing-artist {
+            font-size: 0.8125rem;
+            color: #666666;
+            line-height: 1.3;
+        }
+        
+        .now-playing-source {
+            font-size: 0.75rem;
+            color: #999999;
+            margin-top: 0.5rem;
+            font-style: italic;
         }
         
         .notify-btn {
@@ -1330,13 +1370,31 @@ async def dashboard():
                 durationText = `<div class="zone-duration">${duration}</div>`;
             }
             
-            return `
-                <div class="zone-item">
-                    <div class="zone-name" title="${escapeHtml(zone.name)}">${escapeHtml(zone.name)}</div>
-                    <div class="zone-status ${statusClass}">
-                        ${statusIcon} ${statusText}
+            // Add nowPlaying info for online zones
+            let nowPlayingText = '';
+            if (zone.status === 'online' && zone.nowPlaying && zone.nowPlaying.track) {
+                const track = zone.nowPlaying.track;
+                const playFrom = zone.nowPlaying.playFrom;
+                
+                nowPlayingText = `
+                    <div class="zone-now-playing">
+                        <div class="now-playing-track">♫ ${escapeHtml(track.title)}</div>
+                        <div class="now-playing-artist">${escapeHtml(track.artists)}</div>
+                        ${playFrom ? `<div class="now-playing-source">${playFrom.type}: ${escapeHtml(playFrom.name)}</div>` : ''}
                     </div>
-                    ${durationText}
+                `;
+            }
+            
+            return `
+                <div class="zone-item ${zone.status === 'online' && zone.nowPlaying ? 'zone-item-expanded' : ''}">
+                    <div class="zone-info">
+                        <div class="zone-name" title="${escapeHtml(zone.name)}">${escapeHtml(zone.name)}</div>
+                        <div class="zone-status ${statusClass}">
+                            ${statusIcon} ${statusText}
+                        </div>
+                        ${durationText}
+                    </div>
+                    ${nowPlayingText}
                 </div>
             `;
         }
@@ -2727,6 +2785,10 @@ async def get_zones():
                 # Add offline duration if applicable
                 if offline_duration is not None:
                     zone_data['offline_duration'] = offline_duration
+                
+                # Add nowPlaying information if available
+                if zone_info.get('details') and zone_info['details'].get('nowPlaying'):
+                    zone_data['nowPlaying'] = zone_info['details']['nowPlaying']
                 
                 
                 account_zones.append(zone_data)

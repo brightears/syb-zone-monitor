@@ -127,7 +127,7 @@ class ZoneMonitor:
     
     async def _check_zone_status(self, zone_id: str) -> Tuple[str, str, Dict]:
         """Check detailed status of a specific zone using simplified query."""
-        # Simplified query to reduce token cost
+        # Query with nowPlaying information
         query = """
         query GetZoneStatus($zoneId: ID!) {
             soundZone(id: $zoneId) {
@@ -137,6 +137,31 @@ class ZoneMonitor:
                 online
                 subscription {
                     state
+                }
+                nowPlaying {
+                    track {
+                        id
+                        title
+                        artists {
+                            name
+                        }
+                        album {
+                            name
+                        }
+                        duration
+                    }
+                    startedAt
+                    playFrom {
+                        __typename
+                        ... on Playlist {
+                            id
+                            name
+                        }
+                        ... on Schedule {
+                            id
+                            name
+                        }
+                    }
                 }
             }
         }
@@ -188,6 +213,7 @@ class ZoneMonitor:
                 online = zone_data.get("online", False)
                 subscription = zone_data.get("subscription", {})
                 subscription_state = subscription.get("state") if subscription else None
+                now_playing = zone_data.get("nowPlaying")
                 
                 # Simplified status determination
                 if not is_paired:
@@ -207,8 +233,34 @@ class ZoneMonitor:
                     "subscriptionState": subscription_state
                 }
                 
+                # Add nowPlaying information if available
+                if now_playing and now_playing.get("track"):
+                    track = now_playing["track"]
+                    details["nowPlaying"] = {
+                        "track": {
+                            "title": track.get("title", "Unknown"),
+                            "artists": ", ".join([artist.get("name", "") for artist in track.get("artists", [])]),
+                            "album": track.get("album", {}).get("name", "Unknown") if track.get("album") else "Unknown",
+                            "duration": track.get("duration", 0)
+                        },
+                        "startedAt": now_playing.get("startedAt"),
+                        "playFrom": None
+                    }
+                    
+                    # Add playlist/schedule info if available
+                    if now_playing.get("playFrom"):
+                        play_from = now_playing["playFrom"]
+                        details["nowPlaying"]["playFrom"] = {
+                            "type": play_from.get("__typename", "Unknown"),
+                            "name": play_from.get("name", "Unknown"),
+                            "id": play_from.get("id")
+                        }
+                else:
+                    details["nowPlaying"] = None
+                
                 # Update available tokens on success
-                self.available_tokens = max(0, self.available_tokens - 8)  # Simplified query costs less
+                # NowPlaying query costs more tokens
+                self.available_tokens = max(0, self.available_tokens - 15)
                 
                 return status, zone_name, details
                 
