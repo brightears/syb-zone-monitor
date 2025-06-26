@@ -13,8 +13,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import httpx
 from database import get_database
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from zone_monitor_optimized import ZoneMonitor
 try:
@@ -739,6 +739,244 @@ async def dashboard():
             font-weight: 600;
             text-transform: uppercase;
         }
+        
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            background: white;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 0 2rem;
+        }
+        
+        .nav-tab {
+            padding: 1rem 1.5rem;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #666666;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            position: relative;
+            transition: all 0.2s;
+        }
+        
+        .nav-tab:hover {
+            color: #1a1a1a;
+        }
+        
+        .nav-tab.active {
+            color: #1a1a1a;
+            border-bottom-color: #1a1a1a;
+        }
+        
+        .tab-icon {
+            font-size: 1.125rem;
+        }
+        
+        .badge {
+            background: #ef4444;
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 10px;
+            position: absolute;
+            top: 0.75rem;
+            right: 0.5rem;
+            min-width: 1rem;
+            text-align: center;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* WhatsApp Interface */
+        .whatsapp-container {
+            display: flex;
+            height: calc(100vh - 120px);
+            background: #f5f5f5;
+        }
+        
+        .conversations-list {
+            width: 350px;
+            background: white;
+            border-right: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conversations-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e5e5e5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .conversations-header h3 {
+            margin: 0;
+            font-size: 1.125rem;
+            color: #1a1a1a;
+        }
+        
+        .conversations-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .conversation-item {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        
+        .conversation-item:hover {
+            background: #f9f9f9;
+        }
+        
+        .conversation-item.active {
+            background: #f0f0f0;
+        }
+        
+        .conversation-header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .conversation-name {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        .conversation-time {
+            font-size: 0.75rem;
+            color: #666666;
+        }
+        
+        .conversation-preview {
+            font-size: 0.875rem;
+            color: #666666;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .unread-indicator {
+            background: #25d366;
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 10px;
+            margin-left: 0.5rem;
+        }
+        
+        .chat-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+        
+        .chat-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e5e5e5;
+            background: #f9f9f9;
+        }
+        
+        .chat-info h3 {
+            margin: 0;
+            font-size: 1.125rem;
+            color: #1a1a1a;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            background: #f5f5f5;
+        }
+        
+        .no-conversation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666666;
+        }
+        
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+        }
+        
+        .message.outbound {
+            flex-direction: row-reverse;
+        }
+        
+        .message-bubble {
+            max-width: 60%;
+            padding: 0.75rem 1rem;
+            border-radius: 16px;
+            word-wrap: break-word;
+        }
+        
+        .message.inbound .message-bubble {
+            background: white;
+            border: 1px solid #e5e5e5;
+        }
+        
+        .message.outbound .message-bubble {
+            background: #dcf8c6;
+            margin-left: auto;
+        }
+        
+        .message-time {
+            font-size: 0.625rem;
+            color: #666666;
+            margin-top: 0.25rem;
+        }
+        
+        .message-status {
+            font-size: 0.75rem;
+            color: #666666;
+            margin-left: 0.5rem;
+        }
+        
+        .chat-input {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            background: white;
+        }
+        
+        .chat-input textarea {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            resize: none;
+            font-family: inherit;
+            outline: none;
+        }
+        
+        .chat-input textarea:focus {
+            border-color: #1a1a1a;
+        }
     </style>
 </head>
 <body>
@@ -749,46 +987,91 @@ async def dashboard():
         </h1>
     </div>
     
-    <div class="stats-bar">
-        <div class="stat-item">
-            <div class="stat-value" id="totalAccounts">0</div>
-            <div class="stat-label">Accounts</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value" id="totalZones">0</div>
-            <div class="stat-label">Total Zones</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value" id="onlineZones">0</div>
-            <div class="stat-label">Online</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value" id="offlineZones">0</div>
-            <div class="stat-label">Offline</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value" id="issueAccounts">0</div>
-            <div class="stat-label">Accounts with Issues</div>
-        </div>
-        <div class="countdown" id="countdown">30</div>
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="switchTab('dashboard')">
+            <span class="tab-icon">📊</span> Dashboard
+        </button>
+        <button class="nav-tab" onclick="switchTab('whatsapp')">
+            <span class="tab-icon">💬</span> WhatsApp
+            <span class="badge" id="unreadBadge" style="display: none;">0</span>
+        </button>
     </div>
     
-    <div class="controls">
-        <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="searchInput" placeholder="Search accounts or zones...">
+    <!-- Dashboard Tab Content -->
+    <div id="dashboardTab" class="tab-content active">
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-value" id="totalAccounts">0</div>
+                <div class="stat-label">Accounts</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="totalZones">0</div>
+                <div class="stat-label">Total Zones</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="onlineZones">0</div>
+                <div class="stat-label">Online</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="offlineZones">0</div>
+                <div class="stat-label">Offline</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="issueAccounts">0</div>
+                <div class="stat-label">Accounts with Issues</div>
+            </div>
+            <div class="countdown" id="countdown">30</div>
         </div>
-        <div class="filter-buttons">
-            <button class="filter-btn active" data-filter="all">All</button>
-            <button class="filter-btn" data-filter="issues">With Issues</button>
-            <button class="filter-btn" data-filter="offline">Offline</button>
-            <button class="filter-btn" data-filter="no-device">No Device</button>
-            <button class="filter-btn" data-filter="no-subscription">No Sub</button>
+        
+        <div class="controls">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Search accounts or zones...">
+            </div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="issues">With Issues</button>
+                <button class="filter-btn" data-filter="offline">Offline</button>
+                <button class="filter-btn" data-filter="no-device">No Device</button>
+                <button class="filter-btn" data-filter="no-subscription">No Sub</button>
+            </div>
+        </div>
+        
+        <div class="accounts-container" id="accountsContainer">
+            <div class="loading">Loading zone data...</div>
         </div>
     </div>
     
-    <div class="accounts-container" id="accountsContainer">
-        <div class="loading">Loading zone data...</div>
+    <!-- WhatsApp Tab Content -->
+    <div id="whatsappTab" class="tab-content" style="display: none;">
+        <div class="whatsapp-container">
+            <div class="conversations-list" id="conversationsList">
+                <div class="conversations-header">
+                    <h3>Conversations</h3>
+                    <button class="btn-secondary" onclick="refreshConversations()">Refresh</button>
+                </div>
+                <div class="conversations-content" id="conversationsContent">
+                    <div class="loading">Loading conversations...</div>
+                </div>
+            </div>
+            <div class="chat-view" id="chatView">
+                <div class="chat-header" id="chatHeader">
+                    <div class="chat-info">
+                        <h3>Select a conversation</h3>
+                    </div>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="no-conversation">
+                        <p>Select a conversation from the list to view messages</p>
+                    </div>
+                </div>
+                <div class="chat-input" id="chatInput" style="display: none;">
+                    <textarea id="messageText" placeholder="Type a message..." rows="2"></textarea>
+                    <button class="btn-primary" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Notification Modal -->
@@ -2142,6 +2425,250 @@ async def dashboard():
                 closeAutomationModal();
             }
         }
+        
+        // WhatsApp Conversations Functions
+        let currentConversationId = null;
+        let conversations = [];
+        let whatsappRefreshInterval;
+        
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+                content.style.display = 'none';
+            });
+            
+            if (tabName === 'dashboard') {
+                document.getElementById('dashboardTab').classList.add('active');
+                document.getElementById('dashboardTab').style.display = 'block';
+                // Resume dashboard refresh
+                if (!countdownInterval) {
+                    startCountdown();
+                }
+                // Stop WhatsApp refresh
+                if (whatsappRefreshInterval) {
+                    clearInterval(whatsappRefreshInterval);
+                    whatsappRefreshInterval = null;
+                }
+            } else if (tabName === 'whatsapp') {
+                document.getElementById('whatsappTab').classList.add('active');
+                document.getElementById('whatsappTab').style.display = 'block';
+                // Load conversations
+                loadConversations();
+                // Stop dashboard refresh
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                // Start WhatsApp refresh
+                if (!whatsappRefreshInterval) {
+                    whatsappRefreshInterval = setInterval(loadConversations, 5000);
+                }
+            }
+        }
+        
+        async function loadConversations() {
+            try {
+                const response = await fetch('/api/whatsapp/conversations');
+                conversations = await response.json();
+                renderConversations();
+                updateUnreadBadge();
+            } catch (error) {
+                console.error('Error loading conversations:', error);
+            }
+        }
+        
+        function renderConversations() {
+            const container = document.getElementById('conversationsContent');
+            
+            if (conversations.length === 0) {
+                container.innerHTML = '<div class="no-conversation" style="padding: 2rem; text-align: center; color: #666;">No conversations yet</div>';
+                return;
+            }
+            
+            container.innerHTML = conversations.map(conv => {
+                const lastMessageTime = conv.last_message_at ? formatTime(conv.last_message_at) : '';
+                return `
+                    <div class="conversation-item ${currentConversationId === conv.id ? 'active' : ''}" 
+                         onclick="selectConversation(${conv.id})">
+                        <div class="conversation-header-info">
+                            <div class="conversation-name">
+                                ${escapeHtml(conv.profile_name || conv.phone_number)}
+                                ${conv.unread_count > 0 ? `<span class="unread-indicator">${conv.unread_count}</span>` : ''}
+                            </div>
+                            <div class="conversation-time">${lastMessageTime}</div>
+                        </div>
+                        <div class="conversation-preview">
+                            ${escapeHtml(conv.phone_number)}
+                            ${conv.account_name ? ` - ${escapeHtml(conv.account_name)}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        async function selectConversation(conversationId) {
+            currentConversationId = conversationId;
+            
+            // Update active state
+            document.querySelectorAll('.conversation-item').forEach((item, index) => {
+                if (conversations[index] && conversations[index].id === conversationId) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // Load messages
+            await loadMessages(conversationId);
+            
+            // Update header
+            const conversation = conversations.find(c => c.id === conversationId);
+            if (conversation) {
+                document.getElementById('chatHeader').innerHTML = `
+                    <div class="chat-info">
+                        <h3>${escapeHtml(conversation.profile_name || conversation.phone_number)}</h3>
+                        <div style="font-size: 0.875rem; color: #666;">
+                            ${escapeHtml(conversation.phone_number)}
+                            ${conversation.account_name ? ` - ${escapeHtml(conversation.account_name)}` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                // Show chat input
+                document.getElementById('chatInput').style.display = 'flex';
+            }
+        }
+        
+        async function loadMessages(conversationId) {
+            try {
+                const response = await fetch(`/api/whatsapp/conversations/${conversationId}/messages`);
+                const messages = await response.json();
+                renderMessages(messages);
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+        
+        function renderMessages(messages) {
+            const container = document.getElementById('chatMessages');
+            
+            if (messages.length === 0) {
+                container.innerHTML = '<div class="no-conversation">No messages yet</div>';
+                return;
+            }
+            
+            container.innerHTML = messages.map(msg => {
+                const time = formatTime(msg.created_at);
+                let statusIcon = '';
+                
+                if (msg.direction === 'outbound') {
+                    switch (msg.status) {
+                        case 'sent': statusIcon = '✓'; break;
+                        case 'delivered': statusIcon = '✓✓'; break;
+                        case 'read': statusIcon = '<span style="color: #4FC3F7;">✓✓</span>'; break;
+                        case 'failed': statusIcon = '❌'; break;
+                    }
+                }
+                
+                return `
+                    <div class="message ${msg.direction}">
+                        <div class="message-bubble">
+                            ${escapeHtml(msg.message_text || '[No text]')}
+                            <div class="message-time">
+                                ${time}
+                                ${msg.direction === 'outbound' ? `<span class="message-status">${statusIcon}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        async function sendMessage() {
+            const textarea = document.getElementById('messageText');
+            const message = textarea.value.trim();
+            
+            if (!message || !currentConversationId) return;
+            
+            const conversation = conversations.find(c => c.id === currentConversationId);
+            if (!conversation) return;
+            
+            try {
+                const response = await fetch('/api/whatsapp/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        to: conversation.phone_number,
+                        message: message,
+                        conversation_id: currentConversationId
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    textarea.value = '';
+                    // Reload messages
+                    await loadMessages(currentConversationId);
+                } else {
+                    alert('Failed to send message: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error sending message: ' + error.message);
+            }
+        }
+        
+        function refreshConversations() {
+            loadConversations();
+        }
+        
+        function updateUnreadBadge() {
+            const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
+            const badge = document.getElementById('unreadBadge');
+            
+            if (totalUnread > 0) {
+                badge.textContent = totalUnread;
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+            
+            return date.toLocaleDateString();
+        }
+        
+        // Enable sending with Enter key
+        document.addEventListener('DOMContentLoaded', function() {
+            const messageText = document.getElementById('messageText');
+            if (messageText) {
+                messageText.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
@@ -2714,6 +3241,231 @@ async def save_automation_setting(account_id: str, settings: dict):
         logger.error(f"Failed to save automation settings: {e}")
         return JSONResponse(
             content={'success': False, 'message': str(e)},
+            status_code=500
+        )
+
+
+# WhatsApp webhook endpoints
+@app.get("/webhook/whatsapp")
+async def verify_webhook(request: Request):
+    """Verify webhook for WhatsApp - required by Meta."""
+    # Get query parameters
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+    
+    # Check if token matches (you should set a verify token)
+    verify_token = os.getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "your-verify-token-here")
+    
+    if mode == "subscribe" and token == verify_token:
+        logger.info("WhatsApp webhook verified successfully")
+        return PlainTextResponse(challenge)
+    else:
+        logger.warning("WhatsApp webhook verification failed")
+        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
+
+
+@app.post("/webhook/whatsapp")
+async def receive_webhook(request: Request):
+    """Receive WhatsApp webhook events."""
+    try:
+        body = await request.json()
+        logger.info(f"WhatsApp webhook received: {json.dumps(body, indent=2)}")
+        
+        # Get database
+        db = await get_database()
+        if not db:
+            logger.error("No database available for webhook")
+            return JSONResponse(content={"status": "ok"})
+        
+        # Process the webhook
+        entry = body.get("entry", [])
+        for item in entry:
+            changes = item.get("changes", [])
+            for change in changes:
+                value = change.get("value", {})
+                
+                # Handle incoming messages
+                messages = value.get("messages", [])
+                for message in messages:
+                    await process_incoming_message(db, value, message)
+                
+                # Handle status updates
+                statuses = value.get("statuses", [])
+                for status in statuses:
+                    await process_status_update(db, status)
+        
+        return JSONResponse(content={"status": "ok"})
+        
+    except Exception as e:
+        logger.error(f"Error processing WhatsApp webhook: {e}")
+        return JSONResponse(content={"status": "error"}, status_code=500)
+
+
+async def process_incoming_message(db, value, message):
+    """Process an incoming WhatsApp message."""
+    try:
+        # Extract message details
+        wa_id = message.get("from")
+        message_id = message.get("id")
+        message_type = message.get("type", "text")
+        timestamp = message.get("timestamp")
+        
+        # Get contact info
+        contacts = value.get("contacts", [])
+        profile = contacts[0] if contacts else {}
+        profile_name = profile.get("profile", {}).get("name", "Unknown")
+        
+        # Get or create conversation
+        conversation_id = await db.get_or_create_conversation(
+            wa_id=wa_id,
+            phone_number=wa_id,
+            profile_name=profile_name
+        )
+        
+        if not conversation_id:
+            logger.error(f"Failed to create conversation for {wa_id}")
+            return
+        
+        # Extract message content based on type
+        message_text = None
+        if message_type == "text":
+            message_text = message.get("text", {}).get("body")
+        elif message_type == "image":
+            message_text = message.get("image", {}).get("caption", "[Image]")
+        elif message_type == "document":
+            message_text = f"[Document: {message.get('document', {}).get('filename', 'Unknown')}]"
+        else:
+            message_text = f"[{message_type.title()} message]"
+        
+        # Save message
+        await db.save_whatsapp_message(
+            conversation_id=conversation_id,
+            wa_message_id=message_id,
+            direction="inbound",
+            message_text=message_text,
+            message_type=message_type
+        )
+        
+        logger.info(f"Saved incoming message from {wa_id}: {message_text[:50]}")
+        
+    except Exception as e:
+        logger.error(f"Error processing incoming message: {e}")
+
+
+async def process_status_update(db, status):
+    """Process a WhatsApp message status update."""
+    try:
+        message_id = status.get("id")
+        status_type = status.get("status")
+        timestamp = status.get("timestamp")
+        
+        # Convert timestamp to datetime
+        if timestamp:
+            timestamp = datetime.fromtimestamp(int(timestamp))
+        
+        # Update message status
+        await db.update_message_status(
+            wa_message_id=message_id,
+            status=status_type,
+            timestamp=timestamp
+        )
+        
+        logger.info(f"Updated message {message_id} status to {status_type}")
+        
+    except Exception as e:
+        logger.error(f"Error processing status update: {e}")
+
+
+# WhatsApp conversation API endpoints
+@app.get("/api/whatsapp/conversations")
+async def get_conversations():
+    """Get WhatsApp conversations."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(content={"conversations": []})
+    
+    conversations = await db.get_conversations()
+    return JSONResponse(content={"conversations": conversations})
+
+
+@app.get("/api/whatsapp/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: int):
+    """Get messages for a conversation."""
+    db = await get_database()
+    if not db:
+        return JSONResponse(content={"messages": []})
+    
+    messages = await db.get_conversation_messages(conversation_id)
+    return JSONResponse(content={"messages": messages})
+
+
+@app.post("/api/whatsapp/send")
+async def send_whatsapp_reply(data: dict):
+    """Send a WhatsApp message as a reply."""
+    try:
+        conversation_id = data.get("conversation_id")
+        message_text = data.get("message")
+        
+        if not conversation_id or not message_text:
+            return JSONResponse(
+                content={"success": False, "message": "Missing required fields"},
+                status_code=400
+            )
+        
+        # Get database
+        db = await get_database()
+        if not db:
+            return JSONResponse(
+                content={"success": False, "message": "Database not available"},
+                status_code=500
+            )
+        
+        # Get conversation details
+        conversations = await db.get_conversations()
+        conversation = next((c for c in conversations if c["id"] == conversation_id), None)
+        
+        if not conversation:
+            return JSONResponse(
+                content={"success": False, "message": "Conversation not found"},
+                status_code=404
+            )
+        
+        # Send message via WhatsApp service
+        whatsapp_service = get_whatsapp_service()
+        if not whatsapp_service or not whatsapp_service.enabled:
+            return JSONResponse(
+                content={"success": False, "message": "WhatsApp service not available"},
+                status_code=500
+            )
+        
+        # Send the message
+        result = await whatsapp_service.send_message(
+            to_number=conversation["phone_number"],
+            message=message_text
+        )
+        
+        if result["success"]:
+            # Save outbound message
+            await db.save_whatsapp_message(
+                conversation_id=conversation_id,
+                wa_message_id=result.get("message_id", ""),
+                direction="outbound",
+                message_text=message_text,
+                status="sent"
+            )
+            
+            return JSONResponse(content={"success": True, "message_id": result.get("message_id")})
+        else:
+            return JSONResponse(
+                content={"success": False, "message": result.get("error", "Failed to send")},
+                status_code=500
+            )
+            
+    except Exception as e:
+        logger.error(f"Error sending WhatsApp reply: {e}")
+        return JSONResponse(
+            content={"success": False, "message": str(e)},
             status_code=500
         )
 

@@ -141,6 +141,73 @@ class ZoneDatabase:
                 CREATE INDEX IF NOT EXISTS idx_email_contacts_email 
                 ON email_contacts(email)
             """)
+            
+            # WhatsApp conversations table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+                    id SERIAL PRIMARY KEY,
+                    wa_id VARCHAR(50) NOT NULL,  -- WhatsApp ID of the customer
+                    phone_number VARCHAR(50) NOT NULL,
+                    profile_name VARCHAR(255),
+                    account_id VARCHAR(255),  -- Link to which account this conversation relates to
+                    account_name VARCHAR(255),
+                    status VARCHAR(50) DEFAULT 'active',  -- active, archived, resolved
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    last_message_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    unread_count INTEGER DEFAULT 0,
+                    UNIQUE(wa_id)
+                )
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_wa_id 
+                ON whatsapp_conversations(wa_id)
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_account_id 
+                ON whatsapp_conversations(account_id)
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_status 
+                ON whatsapp_conversations(status)
+            """)
+            
+            # WhatsApp messages table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS whatsapp_messages (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id INTEGER REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
+                    wa_message_id VARCHAR(255) UNIQUE,  -- WhatsApp's message ID
+                    direction VARCHAR(10) NOT NULL,  -- 'inbound' or 'outbound'
+                    message_type VARCHAR(50) DEFAULT 'text',  -- text, image, document, etc.
+                    message_text TEXT,
+                    media_url TEXT,
+                    media_mime_type VARCHAR(100),
+                    status VARCHAR(50),  -- sent, delivered, read, failed
+                    error_message TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    delivered_at TIMESTAMP WITH TIME ZONE,
+                    read_at TIMESTAMP WITH TIME ZONE
+                )
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_conversation_id 
+                ON whatsapp_messages(conversation_id)
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_wa_message_id 
+                ON whatsapp_messages(wa_message_id)
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_created_at 
+                ON whatsapp_messages(created_at)
+            """)
     
     async def save_zone_status(self, zone_id: str, zone_name: str, status: str, 
                               details: Dict, offline_since: Optional[datetime] = None,
@@ -494,6 +561,165 @@ class ZoneDatabase:
                 
         except Exception as e:
             logger.error(f"Error updating email contact: {e}")
+            return False
+    
+    # WhatsApp conversation methods
+    async def get_or_create_conversation(self, wa_id: str, phone_number: str, 
+                                       profile_name: str = None) -> int:
+        """Get or create a WhatsApp conversation."""
+        if not self.pool:
+            return None
+            
+        try:
+            async with self.pool.acquire() as conn:
+                # Try to get existing conversation
+                conversation_id = await conn.fetchval("""
+                    SELECT id FROM whatsapp_conversations
+                    WHERE wa_id = $1
+                """, wa_id)
+                
+                if conversation_id:
+                    # Update last message time
+                    await conn.execute("""
+                        UPDATE whatsapp_conversations
+                        SET last_message_at = NOW(),
+                            updated_at = NOW()
+                        WHERE id = $1
+                    """, conversation_id)
+                else:
+                    # Create new conversation
+                    conversation_id = await conn.fetchval("""
+                        INSERT INTO whatsapp_conversations 
+                        (wa_id, phone_number, profile_name)
+                        VALUES ($1, $2, $3)
+                        RETURNING id
+                    """, wa_id, phone_number, profile_name)
+                    
+                return conversation_id
+                
+        except Exception as e:
+            logger.error(f"Error managing conversation: {e}")
+            return None
+    
+    async def save_whatsapp_message(self, conversation_id: int, wa_message_id: str,
+                                   direction: str, message_text: str = None,
+                                   message_type: str = 'text', status: str = None) -> bool:
+        """Save a WhatsApp message."""
+        if not self.pool:
+            return False
+            
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO whatsapp_messages 
+                    (conversation_id, wa_message_id, direction, message_type, 
+                     message_text, status)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (wa_message_id) DO NOTHING
+                """, conversation_id, wa_message_id, direction, message_type,
+                    message_text, status)
+                
+                # Update unread count if inbound
+                if direction == 'inbound':
+                    await conn.execute("""
+                        UPDATE whatsapp_conversations
+                        SET unread_count = unread_count + 1,
+                            last_message_at = NOW()
+                        WHERE id = $1
+                    """, conversation_id)
+                    
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error saving WhatsApp message: {e}")
+            return False
+    
+    async def get_conversations(self, status: str = None, limit: int = 50) -> List[Dict]:
+        """Get WhatsApp conversations."""
+        if not self.pool:
+            return []
+            
+        try:
+            async with self.pool.acquire() as conn:
+                query = """
+                    SELECT c.*, 
+                           (SELECT COUNT(*) FROM whatsapp_messages m 
+                            WHERE m.conversation_id = c.id) as message_count
+                    FROM whatsapp_conversations c
+                """
+                params = []
+                
+                if status:
+                    query += " WHERE c.status = $1"
+                    params.append(status)
+                    
+                query += " ORDER BY c.last_message_at DESC LIMIT $" + str(len(params) + 1)
+                params.append(limit)
+                
+                rows = await conn.fetch(query, *params)
+                return [dict(row) for row in rows]
+                
+        except Exception as e:
+            logger.error(f"Error getting conversations: {e}")
+            return []
+    
+    async def get_conversation_messages(self, conversation_id: int) -> List[Dict]:
+        """Get messages for a conversation."""
+        if not self.pool:
+            return []
+            
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT * FROM whatsapp_messages
+                    WHERE conversation_id = $1
+                    ORDER BY created_at ASC
+                """, conversation_id)
+                
+                # Mark messages as read
+                await conn.execute("""
+                    UPDATE whatsapp_conversations
+                    SET unread_count = 0
+                    WHERE id = $1
+                """, conversation_id)
+                
+                return [dict(row) for row in rows]
+                
+        except Exception as e:
+            logger.error(f"Error getting messages: {e}")
+            return []
+    
+    async def update_message_status(self, wa_message_id: str, status: str,
+                                   timestamp: datetime = None) -> bool:
+        """Update WhatsApp message status."""
+        if not self.pool:
+            return False
+            
+        try:
+            async with self.pool.acquire() as conn:
+                if status == 'delivered' and timestamp:
+                    await conn.execute("""
+                        UPDATE whatsapp_messages
+                        SET status = $2, delivered_at = $3
+                        WHERE wa_message_id = $1
+                    """, wa_message_id, status, timestamp)
+                elif status == 'read' and timestamp:
+                    await conn.execute("""
+                        UPDATE whatsapp_messages
+                        SET status = $2, read_at = $3
+                        WHERE wa_message_id = $1
+                    """, wa_message_id, status, timestamp)
+                else:
+                    await conn.execute("""
+                        UPDATE whatsapp_messages
+                        SET status = $2
+                        WHERE wa_message_id = $1
+                    """, wa_message_id, status)
+                    
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error updating message status: {e}")
             return False
     
     async def close(self):
