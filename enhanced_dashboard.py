@@ -762,6 +762,22 @@ async def dashboard():
             color: #1a1a1a;
         }
         
+        .btn-danger {
+            padding: 0.75rem 1.5rem;
+            background: #ef4444;
+            border: none;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
         .no-contacts {
             text-align: center;
             padding: 2rem;
@@ -1036,6 +1052,9 @@ async def dashboard():
             <span class="tab-icon">💬</span> WhatsApp
             <span class="badge" id="unreadBadge" style="display: none;">0</span>
         </button>
+        <button class="nav-tab" onclick="switchTab('accounts')">
+            <span class="tab-icon">⚙️</span> Account Management
+        </button>
     </div>
     
     <!-- Dashboard Tab Content -->
@@ -1109,6 +1128,52 @@ async def dashboard():
                 <div class="chat-input" id="chatInput" style="display: none;">
                     <textarea id="messageText" placeholder="Type a message..." rows="2"></textarea>
                     <button class="btn-primary" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Account Management Tab Content -->
+    <div id="accountsTab" class="tab-content" style="display: none;">
+        <div style="padding: 2rem;">
+            <div style="background: white; border-radius: 8px; padding: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h2 style="font-size: 1.5rem; font-weight: 600;">Account Management</h2>
+                    <button class="btn-primary" onclick="showAddAccountModal()" style="padding: 0.75rem 1.5rem;">
+                        Add New Account
+                    </button>
+                </div>
+                
+                <div id="accountsList" style="margin-top: 1.5rem;">
+                    <div style="text-align: center; padding: 2rem; color: #999;">
+                        Loading accounts...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Account Modal -->
+    <div class="modal" id="addAccountModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Add New Account</h2>
+                <button class="close-btn" onclick="closeAddAccountModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem;">
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                        Account ID
+                    </label>
+                    <input type="text" id="newAccountId" placeholder="e.g., QWNjb3VudCwsMWs3bHVkeGY1czAv" 
+                           style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 0.875rem;">
+                    <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
+                        Enter the account ID from Soundtrack Your Brand
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button class="btn-secondary" onclick="closeAddAccountModal()">Cancel</button>
+                    <button class="btn-primary" onclick="addNewAccount()">Add Account</button>
                 </div>
             </div>
         </div>
@@ -2474,6 +2539,7 @@ async def dashboard():
             const notificationModal = document.getElementById('notificationModal');
             const whatsappModal = document.getElementById('whatsappModal');
             const automationModal = document.getElementById('automationModal');
+            const addAccountModal = document.getElementById('addAccountModal');
             
             if (event.target === notificationModal) {
                 closeModal();
@@ -2481,6 +2547,157 @@ async def dashboard():
                 closeWhatsAppModal();
             } else if (event.target === automationModal) {
                 closeAutomationModal();
+            } else if (event.target === addAccountModal) {
+                closeAddAccountModal();
+            }
+        }
+        
+        // Account Management Functions
+        async function loadAccountsList() {
+            try {
+                const response = await fetch('/api/accounts');
+                const data = await response.json();
+                renderAccountsList(data.accounts);
+            } catch (error) {
+                console.error('Failed to load accounts:', error);
+                document.getElementById('accountsList').innerHTML = '<div style="text-align: center; padding: 2rem; color: #ef4444;">Failed to load accounts</div>';
+            }
+        }
+        
+        function renderAccountsList(accounts) {
+            const container = document.getElementById('accountsList');
+            
+            if (!accounts || accounts.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: #999;">No accounts found</div>';
+                return;
+            }
+            
+            let html = '<div style="overflow-x: auto;">';
+            html += '<table style="width: 100%; border-collapse: collapse;">';
+            html += '<thead>';
+            html += '<tr style="border-bottom: 2px solid #e5e5e5;">';
+            html += '<th style="text-align: left; padding: 1rem; font-weight: 600;">Account Name</th>';
+            html += '<th style="text-align: left; padding: 1rem; font-weight: 600;">Country</th>';
+            html += '<th style="text-align: center; padding: 1rem; font-weight: 600;">Zones</th>';
+            html += '<th style="text-align: center; padding: 1rem; font-weight: 600;">Online</th>';
+            html += '<th style="text-align: center; padding: 1rem; font-weight: 600;">Users</th>';
+            html += '<th style="text-align: center; padding: 1rem; font-weight: 600;">Actions</th>';
+            html += '</tr>';
+            html += '</thead>';
+            html += '<tbody>';
+            
+            accounts.forEach(account => {
+                html += '<tr style="border-bottom: 1px solid #e5e5e5;">';
+                html += `<td style="padding: 1rem; font-weight: 500;">${account.name}</td>`;
+                html += `<td style="padding: 1rem;">${account.country || '-'}</td>`;
+                html += `<td style="padding: 1rem; text-align: center;">${account.zone_count}</td>`;
+                html += `<td style="padding: 1rem; text-align: center;">
+                    <span style="color: #22c55e; font-weight: 600;">${account.online_zones}</span>
+                </td>`;
+                html += `<td style="padding: 1rem; text-align: center;">${account.user_count}</td>`;
+                html += `<td style="padding: 1rem; text-align: center;">
+                    <button onclick="refreshAccount('${account.id}')" class="btn-secondary" style="margin-right: 0.5rem; padding: 0.5rem 1rem;">
+                        Refresh
+                    </button>
+                    <button onclick="confirmRemoveAccount('${account.id}', '${account.name.replace(/'/g, "\\'")}')" class="btn-danger" style="padding: 0.5rem 1rem;">
+                        Remove
+                    </button>
+                </td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody>';
+            html += '</table>';
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+        
+        function showAddAccountModal() {
+            document.getElementById('addAccountModal').style.display = 'flex';
+            document.getElementById('newAccountId').value = '';
+            document.getElementById('newAccountId').focus();
+        }
+        
+        function closeAddAccountModal() {
+            document.getElementById('addAccountModal').style.display = 'none';
+        }
+        
+        async function addNewAccount() {
+            const accountId = document.getElementById('newAccountId').value.trim();
+            
+            if (!accountId) {
+                alert('Please enter an account ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/accounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_id: accountId })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Successfully added: ${result.account.name}`);
+                    closeAddAccountModal();
+                    loadAccountsList();
+                } else {
+                    alert(`Failed to add account: ${result.detail}`);
+                }
+            } catch (error) {
+                console.error('Failed to add account:', error);
+                alert('Failed to add account. Please try again.');
+            }
+        }
+        
+        async function refreshAccount(accountId) {
+            if (!confirm('Refresh data for this account?')) return;
+            
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/refresh`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Successfully refreshed: ${result.account.name}`);
+                    loadAccountsList();
+                } else {
+                    alert(`Failed to refresh account: ${result.detail}`);
+                }
+            } catch (error) {
+                console.error('Failed to refresh account:', error);
+                alert('Failed to refresh account. Please try again.');
+            }
+        }
+        
+        function confirmRemoveAccount(accountId, accountName) {
+            if (confirm(`Are you sure you want to remove "${accountName}" from monitoring?\n\nThis will stop monitoring all zones for this account.`)) {
+                removeAccount(accountId);
+            }
+        }
+        
+        async function removeAccount(accountId) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(result.message);
+                    loadAccountsList();
+                } else {
+                    alert(`Failed to remove account: ${result.detail}`);
+                }
+            } catch (error) {
+                console.error('Failed to remove account:', error);
+                alert('Failed to remove account. Please try again.');
             }
         }
         
@@ -2527,6 +2744,20 @@ async def dashboard():
                 // Start WhatsApp refresh
                 if (!whatsappRefreshInterval) {
                     whatsappRefreshInterval = setInterval(loadConversations, 5000);
+                }
+            } else if (tabName === 'accounts') {
+                document.getElementById('accountsTab').classList.add('active');
+                document.getElementById('accountsTab').style.display = 'block';
+                // Load accounts
+                loadAccountsList();
+                // Stop all refreshes
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                if (whatsappRefreshInterval) {
+                    clearInterval(whatsappRefreshInterval);
+                    whatsappRefreshInterval = null;
                 }
             }
         }
@@ -3771,6 +4002,141 @@ async def send_automation_notification(account_id: str, account_info: dict, offl
         
     except Exception as e:
         logger.error(f"Failed to send automation notification: {e}")
+
+
+# Account Management API Endpoints
+@app.get("/api/accounts")
+async def list_accounts():
+    """Get a list of all monitored accounts."""
+    try:
+        from account_manager import AccountManager
+        
+        api_key = os.getenv('SYB_API_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="API key not configured")
+        
+        async with AccountManager(api_key) as manager:
+            accounts = manager.list_accounts()
+            return JSONResponse(content={"accounts": accounts})
+            
+    except Exception as e:
+        logger.error(f"Failed to list accounts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/accounts")
+async def add_account(request: Request):
+    """Add a new account to the monitoring system."""
+    try:
+        data = await request.json()
+        account_id = data.get('account_id')
+        
+        if not account_id:
+            raise HTTPException(status_code=400, detail="account_id is required")
+        
+        from account_manager import AccountManager
+        
+        api_key = os.getenv('SYB_API_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="API key not configured")
+        
+        async with AccountManager(api_key) as manager:
+            success, message, account_data = await manager.add_account(account_id)
+            
+            if success:
+                # Reload discovered data
+                load_discovered_data()
+                
+                # Reinitialize zone monitor with new zones
+                global zone_monitor
+                zone_ids = get_all_zone_ids()
+                if zone_monitor:
+                    zone_monitor.zone_ids = zone_ids
+                    logger.info(f"Updated zone monitor with {len(zone_ids)} zones")
+                
+                return JSONResponse(content={
+                    "success": True,
+                    "message": message,
+                    "account": account_data
+                })
+            else:
+                raise HTTPException(status_code=400, detail=message)
+                
+    except Exception as e:
+        logger.error(f"Failed to add account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/accounts/{account_id}")
+async def remove_account(account_id: str):
+    """Remove an account from the monitoring system."""
+    try:
+        from account_manager import AccountManager
+        
+        api_key = os.getenv('SYB_API_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="API key not configured")
+        
+        async with AccountManager(api_key) as manager:
+            success, message = manager.remove_account(account_id)
+            
+            if success:
+                # Reload discovered data
+                load_discovered_data()
+                
+                # Reinitialize zone monitor with new zones
+                global zone_monitor
+                zone_ids = get_all_zone_ids()
+                if zone_monitor:
+                    zone_monitor.zone_ids = zone_ids
+                    logger.info(f"Updated zone monitor with {len(zone_ids)} zones")
+                
+                # Remove any automation settings for this account
+                if account_id in automation_settings:
+                    del automation_settings[account_id]
+                if account_id in automation_sent:
+                    del automation_sent[account_id]
+                
+                return JSONResponse(content={
+                    "success": True,
+                    "message": message
+                })
+            else:
+                raise HTTPException(status_code=404, detail=message)
+                
+    except Exception as e:
+        logger.error(f"Failed to remove account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/accounts/{account_id}/refresh")
+async def refresh_account(account_id: str):
+    """Refresh data for an existing account."""
+    try:
+        from account_manager import AccountManager
+        
+        api_key = os.getenv('SYB_API_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="API key not configured")
+        
+        async with AccountManager(api_key) as manager:
+            success, message, account_data = await manager.refresh_account(account_id)
+            
+            if success:
+                # Reload discovered data
+                load_discovered_data()
+                
+                return JSONResponse(content={
+                    "success": True,
+                    "message": message,
+                    "account": account_data
+                })
+            else:
+                raise HTTPException(status_code=404, detail=message)
+                
+    except Exception as e:
+        logger.error(f"Failed to refresh account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Add automation checking to the background monitoring

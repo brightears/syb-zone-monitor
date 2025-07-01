@@ -73273,6 +73273,85 @@
       "online_zones": 0,
       "offline_zones": 1,
       "unpaired_zones": 1
+    },
+    "QWNjb3VudCwsMWs3bHVkeGY1czAv": {
+      "id": "QWNjb3VudCwsMWs3bHVkeGY1czAv",
+      "name": "Mövenpick Hotel Amman",
+      "businessType": "hotel",
+      "country": "JO",
+      "createdAt": "2025-07-01T03:05:59.691982Z",
+      "locations": [
+        {
+          "id": "TG9jYXRpb24sLDFzejh3c3V3a3hzL0FjY291bnQsLDFrN2x1ZHhmNXMwLw..",
+          "name": "Mövenpick Hotel Amman",
+          "zones": [
+            {
+              "id": "U291bmRab25lLCwxYzhmbjQwdjk0dy9Mb2NhdGlvbiwsMXN6OHdzdXdreHMvQWNjb3VudCwsMWs3bHVkeGY1czAv",
+              "name": "All Day Dining",
+              "isPaired": false,
+              "online": false,
+              "device": ""
+            },
+            {
+              "id": "U291bmRab25lLCwxYmVubWdjanJ3Zy9Mb2NhdGlvbiwsMXN6OHdzdXdreHMvQWNjb3VudCwsMWs3bHVkeGY1czAv",
+              "name": "Lobby",
+              "isPaired": false,
+              "online": false,
+              "device": ""
+            },
+            {
+              "id": "U291bmRab25lLCwxbjgzOXltdGxoYy9Mb2NhdGlvbiwsMXN6OHdzdXdreHMvQWNjb3VudCwsMWs3bHVkeGY1czAv",
+              "name": "Spa Reception",
+              "isPaired": true,
+              "online": true,
+              "device": "DESKTOP-F9JS4R0"
+            },
+            {
+              "id": "U291bmRab25lLCwxc3J2YTlzMGNuNC9Mb2NhdGlvbiwsMXN6OHdzdXdreHMvQWNjb3VudCwsMWs3bHVkeGY1czAv",
+              "name": "Spa Treatment Rooms",
+              "isPaired": true,
+              "online": true,
+              "device": "DESKTOP-F9JS4R0"
+            }
+          ]
+        }
+      ],
+      "users": [
+        {
+          "id": "VXNlciwsMXJubWs4cmlnb3cv",
+          "name": "keith",
+          "email": "keith@bmasiamusic.com",
+          "role": "OWNER"
+        },
+        {
+          "id": "VXNlciwsMW11NjRoMHI2eW8v",
+          "name": "Kuk",
+          "email": "production@bmasiamusic.com",
+          "role": "ADMIN"
+        },
+        {
+          "id": "VXNlciwsMWNrcWRuaTUzcGMv",
+          "name": "support",
+          "email": "support@bmasiamusic.com",
+          "role": "ADMIN"
+        },
+        {
+          "id": "VXNlciwsMWtzZzVkbHh4YzAv",
+          "name": "SCOTT BALLARD",
+          "email": "scottybdj@yahoo.com",
+          "role": "ADMIN"
+        },
+        {
+          "id": "VXNlcixzb3VuZHRyYWNrOnVzZXI6TmtxYmpiNWhHRmFUVzM2ZUFLOHlQb05zdkd2bWdmY3FKdnR2OXZVeW5VNVVvdllpeCwwLw..",
+          "name": "Emran AlQadi",
+          "email": "emran.alqadi@accor.com",
+          "role": "USER"
+        }
+      ],
+      "zone_count": 4,
+      "online_zones": 2,
+      "offline_zones": 0,
+      "unpaired_zones": 2
     }
   },
   "processing_errors": [
@@ -73317,5 +73396,5 @@
       "timestamp": "2025-06-17T09:20:51.872163"
     }
   ],
-  "timestamp": "2025-06-17T08:59:51.425213"
+  "timestamp": "2025-07-01T20:37:59.428042"
 }
