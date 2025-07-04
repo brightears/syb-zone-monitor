@@ -1435,6 +1435,12 @@ async def dashboard():
                 durationText = `<div class="zone-duration">${duration}</div>`;
             }
             
+            // Add pending status indicator if zone is in stabilization
+            if (zone.pendingStatus) {
+                const pending = zone.pendingStatus;
+                statusText += ` <span style="font-size: 0.75rem; color: #666;">→ ${pending.status} (${pending.confirmations}/${pending.required})</span>`;
+            }
+            
             // Add nowPlaying info for online zones
             let nowPlayingText = '';
             if (zone.status === 'online' && zone.nowPlaying && zone.nowPlaying.track) {
@@ -2980,6 +2986,7 @@ async def get_zones():
     # Combine discovered data with current status
     accounts_data = {}
     
+    # First, add all zones from discovered data
     for account_id, account_info in discovered_data.items():
         account_zones = []
         has_issues = False
@@ -2997,14 +3004,9 @@ async def get_zones():
                 # Get offline duration if available
                 offline_duration = zone_info.get('offline_duration_seconds')
                 
-                status = 'checking'  # Default to 'checking' instead of 'unknown'
-                if zone_status:
-                    status = zone_status
-                    if zone_status in ['offline', 'unpaired', 'expired', 'no_subscription']:
-                        has_issues = True
-                    elif zone_status == 'checking':
-                        # Don't mark as having issues while checking
-                        pass
+                status = zone_status  # Use the actual status from zone monitor
+                if zone_status in ['offline', 'unpaired', 'expired', 'no_subscription']:
+                    has_issues = True
                 
                 zone_data = {
                     'id': zone_id,
@@ -3021,6 +3023,9 @@ async def get_zones():
                 if zone_info.get('details') and zone_info['details'].get('nowPlaying'):
                     zone_data['nowPlaying'] = zone_info['details']['nowPlaying']
                 
+                # Add pending status information if zone is in stabilization
+                if zone_info.get('pending_status'):
+                    zone_data['pendingStatus'] = zone_info['pending_status']
                 
                 account_zones.append(zone_data)
         
@@ -3056,6 +3061,57 @@ async def get_zones():
             'contacts': contacts,
             'hasContacts': len(contacts) > 0,
             'automation': automation_settings.get(account_id)
+        }
+    
+    # Also check for any zones in the monitor that aren't in discovered_data yet
+    # This handles newly added zones that haven't been picked up by discovered_data
+    processed_zone_ids = set()
+    for account_data in accounts_data.values():
+        for zone in account_data['zones']:
+            processed_zone_ids.add(zone['id'])
+    
+    # Find zones in monitor but not in discovered data
+    orphan_zones = []
+    for zone_id, zone_status in zone_monitor.zone_states.items():
+        if zone_id not in processed_zone_ids:
+            zone_info = detailed_status.get(zone_id, {})
+            zone_data = {
+                'id': zone_id,
+                'name': zone_monitor.zone_names.get(zone_id, zone_id),
+                'status': zone_status,
+                'location': 'Unknown'
+            }
+            
+            # Add offline duration if applicable
+            offline_duration = zone_info.get('offline_duration_seconds')
+            if offline_duration is not None:
+                zone_data['offline_duration'] = offline_duration
+            
+            # Add nowPlaying information if available
+            if zone_info.get('details') and zone_info['details'].get('nowPlaying'):
+                zone_data['nowPlaying'] = zone_info['details']['nowPlaying']
+            
+            # Add pending status information if zone is in stabilization
+            if zone_info.get('pending_status'):
+                zone_data['pendingStatus'] = zone_info['pending_status']
+            
+            orphan_zones.append(zone_data)
+    
+    # If we have orphan zones, add them to a temporary account
+    if orphan_zones:
+        logger.info(f"Found {len(orphan_zones)} zones in monitor but not in discovered_data")
+        
+        # Try to find the account from zone details stored in the database
+        # For now, create a temporary account for these zones
+        # They will be properly associated after the next discovery data reload
+        accounts_data['newly_added'] = {
+            'id': 'newly_added',
+            'name': 'Recently Added (Refreshing...)',
+            'zones': orphan_zones,
+            'hasIssues': any(z['status'] in ['offline', 'unpaired', 'expired', 'no_subscription'] for z in orphan_zones),
+            'contacts': [],
+            'hasContacts': False,
+            'automation': None
         }
     
     return JSONResponse(content={'accounts': accounts_data})
@@ -4053,6 +4109,53 @@ async def add_account(request: Request):
                 if zone_monitor:
                     zone_monitor.zone_ids = zone_ids
                     logger.info(f"Updated zone monitor with {len(zone_ids)} zones")
+                    
+                    # Trigger immediate check for the new account's zones
+                    new_zone_ids = []
+                    for location in account_data.get('locations', []):
+                        for zone in location.get('zones', []):
+                            if zone.get('id'):
+                                new_zone_ids.append(zone['id'])
+                                
+                                # Pre-populate zone status based on discovery data
+                                zone_id = zone['id']
+                                zone_name = zone.get('name', zone_id)
+                                is_paired = zone.get('isPaired', False)
+                                online = zone.get('online', False)
+                                
+                                # Determine initial status
+                                if not is_paired:
+                                    initial_status = "unpaired"
+                                elif online:
+                                    initial_status = "online"
+                                else:
+                                    initial_status = "offline"
+                                
+                                # Update zone monitor's internal state
+                                zone_monitor.zone_states[zone_id] = initial_status
+                                zone_monitor.zone_names[zone_id] = zone_name
+                                zone_monitor.zone_details[zone_id] = {
+                                    "isPaired": is_paired,
+                                    "online": online,
+                                    "account_id": account_id,
+                                    "account_name": account_data.get('name')
+                                }
+                                
+                                # Save to database
+                                if zone_monitor.db:
+                                    asyncio.create_task(
+                                        zone_monitor.db.save_zone_status(
+                                            zone_id, zone_name, initial_status, 
+                                            {"isPaired": is_paired, "online": online},
+                                            account_name=account_data.get('name')
+                                        )
+                                    )
+                    
+                    if new_zone_ids:
+                        logger.info(f"Pre-populated status for {len(new_zone_ids)} new zones from account {account_data.get('name')}")
+                        logger.info(f"New zone IDs: {new_zone_ids[:5]}...")  # Log first 5 for debugging
+                        # Still trigger immediate check to get full details
+                        asyncio.create_task(check_new_zones(new_zone_ids))
                 
                 return JSONResponse(content={
                     "success": True,
@@ -4140,6 +4243,56 @@ async def refresh_account(account_id: str):
 
 
 # Add automation checking to the background monitoring
+async def check_new_zones(zone_ids: List[str]):
+    """Check status of newly added zones immediately."""
+    global zone_monitor
+    
+    if not zone_monitor or not zone_ids:
+        return
+    
+    try:
+        logger.info(f"Starting immediate check for {len(zone_ids)} new zones")
+        
+        # Ensure zones are in the monitor's zone_ids list
+        current_zone_ids = set(zone_monitor.zone_ids)
+        new_zones_to_add = [zid for zid in zone_ids if zid not in current_zone_ids]
+        if new_zones_to_add:
+            zone_monitor.zone_ids.extend(new_zones_to_add)
+            logger.info(f"Added {len(new_zones_to_add)} new zones to monitor's zone list")
+        
+        # Check zones in small batches to avoid rate limiting
+        batch_size = 5  # Small batch size for new zones
+        checked_count = 0
+        
+        for i in range(0, len(zone_ids), batch_size):
+            batch = zone_ids[i:i + batch_size]
+            
+            # Check each zone in the batch
+            tasks = []
+            for zone_id in batch:
+                task = zone_monitor._check_single_zone(zone_id)
+                tasks.append(task)
+            
+            # Wait for batch to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Log any errors
+            for zone_id, result in zip(batch, results):
+                if isinstance(result, Exception):
+                    logger.error(f"Error checking zone {zone_id}: {result}")
+                else:
+                    checked_count += 1
+            
+            # Small delay between batches
+            if i + batch_size < len(zone_ids):
+                await asyncio.sleep(1)
+        
+        logger.info(f"Completed immediate check for {checked_count}/{len(zone_ids)} new zones")
+        
+    except Exception as e:
+        logger.error(f"Error checking new zones: {e}", exc_info=True)
+
+
 async def monitor_zones_with_automation():
     """Enhanced background task that includes automation checking."""
     global zone_monitor
