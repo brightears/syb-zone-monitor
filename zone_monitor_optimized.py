@@ -203,11 +203,6 @@ class ZoneMonitor:
                 subscription {
                     state
                 }
-                device {
-                    id
-                    name
-                    pairedAt
-                }
                 nowPlaying {
                     track {
                         id
@@ -284,17 +279,9 @@ class ZoneMonitor:
                 subscription = zone_data.get("subscription", {})
                 subscription_state = subscription.get("state") if subscription else None
                 now_playing = zone_data.get("nowPlaying")
-                device = zone_data.get("device")
                 
-                # Enhanced unpaired detection
-                # Only check device presence if device data is provided
-                if device is not None:
-                    # We have device data - check if it has an ID
-                    has_device = device.get("id") is not None
-                    if not is_paired or not has_device:
-                        status = "unpaired"
-                elif not is_paired:
-                    # No device data available - trust the isPaired flag
+                # Simplified status determination
+                if not is_paired:
                     status = "unpaired"
                 elif subscription_state is None:
                     status = "no_subscription"
@@ -308,10 +295,7 @@ class ZoneMonitor:
                 details = {
                     "isPaired": is_paired,
                     "online": online,
-                    "subscriptionState": subscription_state,
-                    "hasDevice": has_device,
-                    "deviceId": device.get("id") if device else None,
-                    "deviceName": device.get("name") if device else None
+                    "subscriptionState": subscription_state
                 }
                 
                 # Add nowPlaying information if available
@@ -352,31 +336,6 @@ class ZoneMonitor:
                 else:
                     raise
     
-    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str) -> str:
-        """Determine zone status based on 5 levels."""
-        # Level 5: No paired device (check both isPaired flag and device presence when available)
-        if device is not None:
-            # We have device data - check if it has an ID
-            has_device = isinstance(device, dict) and device.get("id") is not None
-            if not is_paired or not has_device:
-                return "unpaired"
-        elif not is_paired:
-            # No device data available - trust the isPaired flag
-            return "unpaired"
-        
-        # Level 4: No subscription (has device but no subscription)
-        if subscription_state is None:
-            return "no_subscription"
-        
-        # Level 3: Subscription expired or cancelled
-        if subscription_state == "EXPIRED" or (subscription_state != "ACTIVE" and not subscription_active):
-            return "expired"
-        
-        # Level 1 & 2: Device is paired and subscription active
-        if online:
-            return "online"    # Level 1: Paired and online
-        else:
-            return "offline"   # Level 2: Paired but offline
     
     async def _update_zone_state(self, zone_id: str, status: str, zone_name: str, details: Dict) -> None:
         """Update the internal state for a zone with status stabilization."""
@@ -384,27 +343,8 @@ class ZoneMonitor:
         self.zone_details[zone_id] = details
         previous_state = self.zone_states.get(zone_id)
         
-        # Check if device was unpaired (special case for immediate update)
-        if status == "unpaired" and zone_id in self.zone_states and self.zone_states[zone_id] != "unpaired":
-            # Device unpaired - update immediately without stabilization
-            self.logger.warning(f"Zone {zone_name} device unpaired - updating immediately")
-            self.zone_states[zone_id] = status
-            
-            # Remove from offline tracking
-            if zone_id in self.offline_since:
-                del self.offline_since[zone_id]
-            
-            # Remove from priority queue
-            if zone_id in self.priority_zones:
-                self.priority_zones.discard(zone_id)
-                
-            # Clear any pending changes
-            if zone_id in self.pending_status_changes:
-                del self.pending_status_changes[zone_id]
-            if zone_id in self.status_confirmation_count:
-                del self.status_confirmation_count[zone_id]
         # Status stabilization logic
-        elif zone_id in self.zone_states and self.zone_states[zone_id] != status:
+        if zone_id in self.zone_states and self.zone_states[zone_id] != status:
             # Status is changing - apply stabilization
             
             if zone_id in self.pending_status_changes:
