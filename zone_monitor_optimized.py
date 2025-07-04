@@ -34,7 +34,7 @@ class ZoneMonitor:
         # Status stabilization - prevent flickering
         self.pending_status_changes: Dict[str, Tuple[str, datetime]] = {}  # zone_id -> (new_status, first_seen)
         self.status_confirmation_count: Dict[str, int] = {}  # zone_id -> count of consistent readings
-        self.STABILIZATION_THRESHOLD = 1  # Temporarily reduced to 1 for immediate updates
+        self.STABILIZATION_THRESHOLD = 2  # Number of consistent readings required
         
         # Make zone_ids mutable for dynamic updates
         self.zone_ids = list(config.zone_ids) if hasattr(config, 'zone_ids') else []
