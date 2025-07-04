@@ -31,18 +31,6 @@ class ZoneMonitor:
         self.last_check_time: Optional[datetime] = None
         self.db = None  # Database instance
         
-        # Status stabilization - prevent flickering
-        self.pending_status_changes: Dict[str, Tuple[str, datetime]] = {}  # zone_id -> (new_status, first_seen)
-        self.status_confirmation_count: Dict[str, int] = {}  # zone_id -> count of consistent readings
-        self.STABILIZATION_THRESHOLD = 2  # Number of consistent readings required
-        
-        # Make zone_ids mutable for dynamic updates
-        self.zone_ids = list(config.zone_ids) if hasattr(config, 'zone_ids') else []
-        
-        # Priority queue for zones that need more frequent checking
-        self.priority_zones: set = set()  # Zones that went offline recently
-        self.last_priority_check: Optional[datetime] = None
-        
         # Rate limiting
         self.rate_limit_reset = datetime.now()
         self.available_tokens = 100  # Start with assumed tokens
@@ -75,40 +63,22 @@ class ZoneMonitor:
                     self.offline_since[zone_id] = state_data['offline_since']
             
             self.logger.info(f"Loaded {len(saved_states)} zone states from database")
-            
-            # Initialize any new zones that aren't in the database yet
-            new_zones = set(self.zone_ids) - set(saved_states.keys())
-            if new_zones:
-                self.logger.info(f"Found {len(new_zones)} new zones not in database")
-                # Mark them as pending initial check
-                for zone_id in new_zones:
-                    self.zone_states[zone_id] = "checking"
-                    self.zone_names[zone_id] = zone_id  # Use ID as temporary name
     
     async def check_zones(self) -> None:
         """Check status of all configured zones with smart rate limiting."""
         self.last_check_time = datetime.now()
         
-        # Check priority zones first if it's been more than 2 minutes
-        if self.priority_zones and (not self.last_priority_check or 
-                                   (datetime.now() - self.last_priority_check).total_seconds() > 120):
-            await self.check_priority_zones()
-        
         # Dynamic batch size based on available tokens
         # Each query costs 16 tokens, so batch size = available_tokens / 16
         batch_size = max(1, min(20, self.available_tokens // 16))  # Max 20, min 1
         
-        zone_ids = list(self.zone_ids)  # Use instance variable
+        zone_ids = list(self.config.zone_ids)
         total_zones = len(zone_ids)
         
-        # Prioritize offline zones at the beginning of the check cycle
-        offline_zones = [z for z in zone_ids if self.zone_states.get(z) == 'offline']
-        online_zones = [z for z in zone_ids if z not in offline_zones]
+        # Shuffle zones to ensure fair checking across batches
+        random.shuffle(zone_ids)
         
-        # Check offline zones first, then online zones
-        zone_ids = offline_zones + online_zones
-        
-        self.logger.info(f"Starting to check {total_zones} zones ({len(offline_zones)} offline first) in batches of {batch_size}")
+        self.logger.info(f"Starting to check {total_zones} zones in batches of {batch_size} (available tokens: {self.available_tokens})")
         
         checked_count = 0
         
@@ -143,41 +113,6 @@ class ZoneMonitor:
                 await asyncio.sleep(2)  # Longer delay
             elif i + batch_size < total_zones:
                 await asyncio.sleep(0.5)  # Normal delay between batches
-    
-    async def check_priority_zones(self) -> None:
-        """Check priority zones (recently offline) more frequently."""
-        if not self.priority_zones:
-            return
-            
-        self.logger.info(f"Checking {len(self.priority_zones)} priority zones")
-        self.last_priority_check = datetime.now()
-        
-        # Check priority zones in small batches
-        priority_list = list(self.priority_zones)
-        batch_size = min(5, len(priority_list))  # Smaller batches for priority zones
-        
-        for i in range(0, len(priority_list), batch_size):
-            batch = priority_list[i:i + batch_size]
-            
-            tasks = []
-            for zone_id in batch:
-                task = self._check_single_zone(zone_id)
-                tasks.append(task)
-            
-            await asyncio.gather(*tasks, return_exceptions=True)
-            
-            if i + batch_size < len(priority_list):
-                await asyncio.sleep(0.5)
-        
-        # Remove zones that have been online for a while from priority list
-        zones_to_remove = []
-        for zone_id in self.priority_zones:
-            if self.zone_states.get(zone_id) == 'online':
-                zones_to_remove.append(zone_id)
-        
-        for zone_id in zones_to_remove:
-            self.priority_zones.discard(zone_id)
-            self.logger.info(f"Removed {self.zone_names.get(zone_id, zone_id)} from priority queue (back online)")
     
     async def _check_single_zone(self, zone_id: str) -> None:
         """Check a single zone and update its state."""
@@ -336,57 +271,39 @@ class ZoneMonitor:
                 else:
                     raise
     
+    def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str) -> str:
+        """Determine zone status based on 5 levels."""
+        # Level 5: No paired device (explicitly not paired)
+        if not is_paired:
+            return "unpaired"
+        
+        # If isPaired is True but device data is missing, check subscription to determine status
+        if device is None:
+            if subscription_state is None:
+                return "no_subscription"  # Has pairing capability but no subscription
+            else:
+                return "unpaired"  # Device issue despite isPaired=True
+        
+        # Level 4: No subscription (has device but no subscription)
+        if subscription_state is None:
+            return "no_subscription"
+        
+        # Level 3: Subscription expired or cancelled
+        if subscription_state == "EXPIRED" or (subscription_state != "ACTIVE" and not subscription_active):
+            return "expired"
+        
+        # Level 1 & 2: Device is paired and subscription active
+        if online:
+            return "online"    # Level 1: Paired and online
+        else:
+            return "offline"   # Level 2: Paired but offline
     
     async def _update_zone_state(self, zone_id: str, status: str, zone_name: str, details: Dict) -> None:
-        """Update the internal state for a zone with status stabilization."""
+        """Update the internal state for a zone."""
         self.zone_names[zone_id] = zone_name
         self.zone_details[zone_id] = details
         previous_state = self.zone_states.get(zone_id)
-        
-        # Status stabilization logic
-        if zone_id in self.zone_states and self.zone_states[zone_id] != status:
-            # Status is changing - apply stabilization
-            
-            if zone_id in self.pending_status_changes:
-                pending_status, first_seen = self.pending_status_changes[zone_id]
-                
-                if pending_status == status:
-                    # Same pending status seen again
-                    self.status_confirmation_count[zone_id] = self.status_confirmation_count.get(zone_id, 1) + 1
-                    
-                    if self.status_confirmation_count[zone_id] >= self.STABILIZATION_THRESHOLD:
-                        # Enough confirmations - apply the change
-                        self.logger.info(f"Zone {zone_name} status stabilized from {self.zone_states[zone_id]} to {status} after {self.status_confirmation_count[zone_id]} confirmations")
-                        self.zone_states[zone_id] = status
-                        
-                        # Clean up stabilization tracking
-                        del self.pending_status_changes[zone_id]
-                        del self.status_confirmation_count[zone_id]
-                    else:
-                        # Still pending - keep current status
-                        self.logger.debug(f"Zone {zone_name} pending status change to {status} ({self.status_confirmation_count[zone_id]}/{self.STABILIZATION_THRESHOLD} confirmations)")
-                        return  # Don't update the status yet
-                else:
-                    # Different status - reset stabilization
-                    self.logger.debug(f"Zone {zone_name} status changed from pending {pending_status} to {status}, resetting stabilization")
-                    self.pending_status_changes[zone_id] = (status, datetime.now())
-                    self.status_confirmation_count[zone_id] = 1
-                    return  # Don't update the status yet
-            else:
-                # First time seeing this status change
-                self.logger.debug(f"Zone {zone_name} starting status stabilization from {self.zone_states[zone_id]} to {status}")
-                self.pending_status_changes[zone_id] = (status, datetime.now())
-                self.status_confirmation_count[zone_id] = 1
-                return  # Don't update the status yet
-        else:
-            # No status change or new zone - apply immediately
-            self.zone_states[zone_id] = status
-            
-            # Clear any pending changes since status is stable
-            if zone_id in self.pending_status_changes:
-                del self.pending_status_changes[zone_id]
-            if zone_id in self.status_confirmation_count:
-                del self.status_confirmation_count[zone_id]
+        self.zone_states[zone_id] = status
         
         # Extract account name from zone name pattern
         account_name = self._determine_account_name(zone_name)
@@ -405,15 +322,10 @@ class ZoneMonitor:
             if previous_state == "online":  # Was online, now offline
                 self.offline_since[zone_id] = datetime.now()
                 self.logger.warning(f"Zone {zone_name} went offline")
-                # Add to priority queue for more frequent checking
-                self.priority_zones.add(zone_id)
-                self.logger.info(f"Added {zone_name} to priority queue for frequent checking")
             elif zone_id not in self.offline_since:
                 # First time checking this zone and it's offline
                 self.offline_since[zone_id] = datetime.now()
                 self.logger.warning(f"Zone {zone_name} detected as offline")
-                # Also add to priority queue
-                self.priority_zones.add(zone_id)
         else:
             # Zone has subscription/pairing issues - don't track as "offline"
             if zone_id in self.offline_since:
@@ -498,17 +410,6 @@ class ZoneMonitor:
                 "offline_duration_seconds": None,
                 "details": zone_details
             }
-            
-            # Add pending status information if in stabilization
-            if zone_id in self.pending_status_changes:
-                pending_status, first_seen = self.pending_status_changes[zone_id]
-                confirmations = self.status_confirmation_count.get(zone_id, 0)
-                zone_info["pending_status"] = {
-                    "status": pending_status,
-                    "confirmations": confirmations,
-                    "required": self.STABILIZATION_THRESHOLD,
-                    "first_seen": first_seen.isoformat()
-                }
             
             if zone_id in self.offline_since:
                 offline_start = self.offline_since[zone_id]
