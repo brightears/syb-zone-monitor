@@ -287,11 +287,14 @@ class ZoneMonitor:
                 device = zone_data.get("device")
                 
                 # Enhanced unpaired detection
-                # Check both isPaired flag and actual device presence
-                has_device = device is not None and device.get("id") is not None
-                
-                # Simplified status determination with better unpaired detection
-                if not is_paired or not has_device:
+                # Only check device presence if device data is provided
+                if device is not None:
+                    # We have device data - check if it has an ID
+                    has_device = device.get("id") is not None
+                    if not is_paired or not has_device:
+                        status = "unpaired"
+                elif not is_paired:
+                    # No device data available - trust the isPaired flag
                     status = "unpaired"
                 elif subscription_state is None:
                     status = "no_subscription"
@@ -351,10 +354,14 @@ class ZoneMonitor:
     
     def _determine_zone_status(self, is_paired: bool, online: bool, device: Dict, subscription_active: bool, subscription_state: str) -> str:
         """Determine zone status based on 5 levels."""
-        # Level 5: No paired device (check both isPaired flag and device presence)
-        has_device = device is not None and (isinstance(device, dict) and device.get("id") is not None)
-        
-        if not is_paired or not has_device:
+        # Level 5: No paired device (check both isPaired flag and device presence when available)
+        if device is not None:
+            # We have device data - check if it has an ID
+            has_device = isinstance(device, dict) and device.get("id") is not None
+            if not is_paired or not has_device:
+                return "unpaired"
+        elif not is_paired:
+            # No device data available - trust the isPaired flag
             return "unpaired"
         
         # Level 4: No subscription (has device but no subscription)
