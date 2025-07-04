@@ -253,6 +253,7 @@ async def startup_event():
         
         # Start background task to check zones periodically with automation
         asyncio.create_task(monitor_zones_with_automation())
+        asyncio.create_task(monitor_priority_zones())
     else:
         logger.warning("No zones to monitor - running in display-only mode")
         zone_monitor = None
@@ -1441,23 +1442,41 @@ async def dashboard():
                 statusText += ` <span style="font-size: 0.75rem; color: #666;">→ ${pending.status} (${pending.confirmations}/${pending.required})</span>`;
             }
             
-            // Add nowPlaying info for online zones
+            // Add last seen playing info
             let nowPlayingText = '';
-            if (zone.status === 'online' && zone.nowPlaying && zone.nowPlaying.track) {
+            if (zone.nowPlaying && zone.nowPlaying.track) {
                 const track = zone.nowPlaying.track;
                 const playFrom = zone.nowPlaying.playFrom;
+                
+                // Calculate how long ago this was checked
+                let timeAgoText = '';
+                if (zone.lastChecked) {
+                    const lastCheck = new Date(zone.lastChecked);
+                    const now = new Date();
+                    const minutesAgo = Math.floor((now - lastCheck) / 60000);
+                    
+                    if (minutesAgo < 1) {
+                        timeAgoText = 'just now';
+                    } else if (minutesAgo < 60) {
+                        timeAgoText = `${minutesAgo} min ago`;
+                    } else {
+                        const hoursAgo = Math.floor(minutesAgo / 60);
+                        timeAgoText = `${hoursAgo} hour${hoursAgo !== 1 ? 's' : ''} ago`;
+                    }
+                }
                 
                 nowPlayingText = `
                     <div class="zone-now-playing">
                         <div class="now-playing-track">♫ ${escapeHtml(track.title)}</div>
                         <div class="now-playing-artist">${escapeHtml(track.artists)}</div>
                         ${playFrom ? `<div class="now-playing-source">${playFrom.type}: ${escapeHtml(playFrom.name)}</div>` : ''}
+                        ${timeAgoText ? `<div class="now-playing-time" style="font-size: 0.7rem; color: #999; margin-top: 2px;">Last seen: ${timeAgoText}</div>` : ''}
                     </div>
                 `;
             }
             
             return `
-                <div class="zone-item ${zone.status === 'online' && zone.nowPlaying ? 'zone-item-expanded' : ''}">
+                <div class="zone-item ${zone.nowPlaying ? 'zone-item-expanded' : ''}">
                     <div class="zone-info">
                         <div class="zone-name" title="${escapeHtml(zone.name)}">${escapeHtml(zone.name)}</div>
                         <div class="zone-status ${statusClass}">
@@ -2317,7 +2336,7 @@ async def dashboard():
             window.currentAccountId = accountId;
             const settings = automationSettings[accountId] || {
                 enabled: false,
-                offline_threshold_hours: 24,
+                offline_threshold_hours: 2,  // Reduced from 24 to 2 hours
                 notify_emails: [],
                 notify_whatsapp: [],
                 notification_cooldown_hours: 24
@@ -3022,6 +3041,8 @@ async def get_zones():
                 # Add nowPlaying information if available
                 if zone_info.get('details') and zone_info['details'].get('nowPlaying'):
                     zone_data['nowPlaying'] = zone_info['details']['nowPlaying']
+                    # Add last check timestamp
+                    zone_data['lastChecked'] = zone_monitor.last_check_time.isoformat() if zone_monitor.last_check_time else None
                 
                 # Add pending status information if zone is in stabilization
                 if zone_info.get('pending_status'):
@@ -3090,6 +3111,8 @@ async def get_zones():
             # Add nowPlaying information if available
             if zone_info.get('details') and zone_info['details'].get('nowPlaying'):
                 zone_data['nowPlaying'] = zone_info['details']['nowPlaying']
+                # Add last check timestamp
+                zone_data['lastChecked'] = zone_monitor.last_check_time.isoformat() if zone_monitor.last_check_time else None
             
             # Add pending status information if zone is in stabilization
             if zone_info.get('pending_status'):
@@ -3948,10 +3971,22 @@ async def check_automation_triggers():
                 
                 zone_status = zones_status.get(zone_id, {})
                 if zone_status.get('status') == 'offline':
-                    offline_duration = zone_status.get('offline_duration', 0)
+                    offline_duration = zone_status.get('offline_duration_seconds', 0)
                     threshold_seconds = settings['offline_threshold_hours'] * 3600
                     
-                    if offline_duration >= threshold_seconds:
+                    # Implement tiered notifications:
+                    # - First alert at 15 minutes for critical zones
+                    # - Normal alert at configured threshold
+                    is_critical = "critical" in zone.get('name', '').lower() or "main" in zone.get('name', '').lower()
+                    quick_alert_threshold = 900  # 15 minutes for critical zones
+                    
+                    should_notify = False
+                    if is_critical and offline_duration >= quick_alert_threshold:
+                        should_notify = True
+                    elif offline_duration >= threshold_seconds:
+                        should_notify = True
+                    
+                    if should_notify:
                         # Check if we've already sent a notification recently
                         if account_id not in automation_sent:
                             automation_sent[account_id] = {}
@@ -4311,6 +4346,27 @@ async def monitor_zones_with_automation():
         
         # Wait for the polling interval
         await asyncio.sleep(60)  # Check every 60 seconds
+
+
+async def monitor_priority_zones():
+    """Check priority zones (recently offline) every 2 minutes."""
+    global zone_monitor
+    
+    await asyncio.sleep(60)  # Initial delay to let main monitoring start
+    
+    while True:
+        try:
+            if zone_monitor and zone_monitor.priority_zones:
+                logger.info(f"Running priority check for {len(zone_monitor.priority_zones)} recently offline zones")
+                await zone_monitor.check_priority_zones()
+                
+                # Also check automation triggers for these zones
+                await check_automation_triggers()
+        except Exception as e:
+            logger.error(f"Error in priority monitoring: {e}")
+        
+        # Check every 2 minutes
+        await asyncio.sleep(120)
 
 
 if __name__ == "__main__":
